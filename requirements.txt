@@ -1,0 +1,4 @@
+solaredge_modbus==3.5.4
+pymodbus
+pyserial
+pyserial-asyncio
