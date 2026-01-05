@@ -1,4 +1,4 @@
-import asyncio, math
+import asyncio, math, time
 from aioesphomeapi import (
     APIClient, APIConnectionError,
     SensorInfo, BinarySensorInfo, TextSensorInfo,
@@ -6,14 +6,18 @@ from aioesphomeapi import (
 
 HOST = "192.168.30.182"
 PORT = 6053
-ENCRYPTION_KEY = ""
-WINDOW_SECONDS = 6  # increase to 8–10 if needed
+ENCRYPTION_KEY = "004Nt8RGUB3CMOGb9vnY3sCblsx8vYbZSwrSwE2UbOE="  # base64-encoded 32-byte key
+WINDOW_SECONDS = 0.5  # Reduced from 3 seconds
 
 async def main():
+    start_time = time.time()
+    
     client = APIClient(HOST, PORT, password="", noise_psk=ENCRYPTION_KEY)
     try:
         await client.connect(login=True)
 
+        print(f"Time to connect: {time.time() - start_time:.2f} seconds")
+        
         # discover entities
         entities, _ = await client.list_entities_services()
         meta = {}  # key -> (object_id, name, unit, kind)
@@ -49,8 +53,12 @@ async def main():
         # subscribe (do NOT await; not a coroutine in many versions)
         client.subscribe_states(on_state)
 
+        print(f"Time to discover entities: {time.time() - start_time:.2f} seconds")
+        
         # allow time for the device to push current states
-        # await asyncio.sleep(WINDOW_SECONDS)
+        await asyncio.sleep(WINDOW_SECONDS)
+
+        print(f"Time after sleep: {time.time() - start_time:.2f} seconds")
 
         # print snapshot
         print("Entities (sensor/binary_sensor/text_sensor):")
@@ -68,6 +76,7 @@ async def main():
         print("Failed to connect:", e)
     finally:
         await client.disconnect()
+        print(f"Total time: {time.time() - start_time:.2f} seconds")
 
 if __name__ == "__main__":
     asyncio.run(main())
