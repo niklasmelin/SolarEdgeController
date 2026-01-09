@@ -52,7 +52,7 @@ class EspReader:
         a timeout, before data access is allowed.
         - Sensor values are updated asynchronously via ESPHome state callbacks.
         """
-        
+
         self.host = host
         self.port = port
         self.encryption_key = encryption_key
@@ -236,7 +236,7 @@ class EspReader:
 
     def get_data_as_json(self) -> dict:
         """
-        
+
         Return the latest ESPHome sensor data in a human-friendly JSON-like format.
 
         This method formats the most recent sensor values into a structured
@@ -320,14 +320,15 @@ class EspReader:
 # ------------------- EXAMPLE USAGE -------------------
 async def main():
     reader = EspReader(
-        host="192.168.30.182",
+        host="192.168.1.2",
         port=6053,
-        encryption_key="004Nt8RGUB3CMOGb9vnY3sCblsx8vYbZSwrSwE2UbOE=",
+        encryption_key="abcabcabcabcabcabcabcabcabcabcabcabcabcabca=",
+
     )
 
     await reader.ensure_connected()
 
-    while True:
+    for i in range(3):
         data = reader.get_data_as_json()
         for info in data.values():
             ts = info["last_updated"]
@@ -339,8 +340,8 @@ async def main():
                 f"{info['unit']:<6} "
                 f"Last Updated: {ts_str}"
             )
-        print("\n")
-        await asyncio.sleep(6)
+        print(f"\n - Loop {i + 1} of 3")
+        await asyncio.sleep(2)
 
 
 if __name__ == "__main__":
