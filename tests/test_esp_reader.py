@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch, MagicMock
 import time
-from src.EspReader import EspReader
+from solar_controller.sensors.esphome_reader import EspReader
 from aioesphomeapi import SensorInfo, BinarySensorInfo, TextSensorInfo
 
 
@@ -197,7 +197,7 @@ class TestEspReader(unittest.IsolatedAsyncioTestCase):
         )
 
         # Import the main function locally so we can test it
-        from src.EspReader import main
+        from solar_controller.sensors.esphome_reader import main
 
         # Run the main function (3 iterations)
         await main()

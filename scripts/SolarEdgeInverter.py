@@ -1,4 +1,3 @@
-# import asyncio
 import logging
 import solaredge_modbus
 
@@ -8,9 +7,6 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s",  # Log format
     datefmt="%Y-%m-%d %H:%M:%S",  # Date format
 )
-
-# Create a logger instance
-logger = logging.getLogger("SolarEdgeLogger")
 
 REGISTER_SCALE_FACTORS = {
     "current": "current_scale",
@@ -137,6 +133,13 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.info("Initializing SolarEdgeInverter class...")
 
+        try:
+            # Call the parent class constructor
+            super().__init__(device=device, baud=baud, timeout=timeout)
+        except Exception as e:
+            self.logger.error(f"Error initializing SolarEdgeInverter: {e}")
+            raise
+        
         # Store device and baud rate
         self.device = device
         self.baud = baud
@@ -190,7 +193,7 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         self.export_control_limit_mode: int = None
         self.export_control_site_limit: float = None
 
-    async def check_connection(self) -> bool:
+    def check_connection(self) -> bool:
         """
         Checks the connection to the inverter.
         :return: True if connected, False otherwise.
@@ -205,30 +208,28 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         Connects to the inverter, reads all registers, applies scaling factors,
         and stores the scaled data in the class attributes.
         """
-        # Initialize the connection
-        super().__init__(device=self.device, baud=self.baud, timeout=self.timeout)
         await self.connect()
 
         if not self.connected():
-            logger.error("Failed to connect to the inverter.")
+            self.logger.error("Failed to connect to the inverter.")
             raise ConnectionError("Failed to connect to the inverter.")
 
         # Read all registers
-        logger.info("Reading all registers from the inverter...")
+        self.logger.info("Reading all registers from the inverter...")
         registers = self.read_all()
 
         # Set SunSpec registers
-        logger.debug("Read SunSpec registers...")
+        self.logger.debug("Read SunSpec registers...")
         for key in SUNSPEC_REGISTERS:
             if key in registers:
                 if hasattr(self, key):
                     setattr(self, key, registers[key])
-                    logger.debug(f"\t{key:<40s} - {registers[key]}")
+                    self.logger.debug(f"\t{key:<40s} - {registers[key]}")
                 else:
-                    logger.warning(f"Warning: Attribute {key} not found in class.")
+                    self.logger.warning(f"Warning: Attribute {key} not found in class.")
 
         # Apply scaling factors and store the scaled data
-        logger.debug("Read scaling factors and setting registers...")
+        self.logger.debug("Read scaling factors and setting registers...")
         for key, scale_key in REGISTER_SCALE_FACTORS.items():
             if key in registers and scale_key in registers:
                 scaled_value = round(
@@ -239,21 +240,21 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
             # Store the scaled value in the corresponding attribute
             if hasattr(self, key):
                 setattr(self, key, scaled_value)
-                logger.debug(f"\t{key:<40s} - {registers[key]}")
+                self.logger.debug(f"\t{key:<40s} - {registers[key]}")
             else:
-                logger.warning(f"Warning: Attribute {key} not found in class.")
+                self.logger.warning(f"Warning: Attribute {key} not found in class.")
 
         # Set Inverter Status registers
-        logger.debug("Read Inverter Status registers...")
+        self.logger.debug("Read Inverter Status registers...")
         for key in INVERTER_STATUS_REGISTERS:
             if key in registers:
                 if hasattr(self, key):
                     key_type_conversion = self.registers[key][4]
                     setattr(self, key, key_type_conversion(registers[key]))
-                    logger.debug(f"\t{key:<40s} - {registers[key]}")
+                    self.logger.debug(f"\t{key:<40s} - {registers[key]}")
 
                 else:
-                    logger.warning(f"Warning: Attribute {key} not found in class.")
+                    self.logger.warning(f"Warning: Attribute {key} not found in class.")
 
         # Disconnect after reading
         await self.disconnect()
@@ -264,13 +265,13 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         and stores the scaled data in the class attributes.
         """
         # Read poll registers
-        logger.info("Reading inverter poll registers from the inverter...")
+        self.logger.info("Reading inverter poll registers from the inverter...")
 
         # Initialize the connection
         self.connect()
 
         if not self.connected():
-            logger.error("Failed to connect to the inverter.")
+            self.logger.error("Failed to connect to the inverter.")
             raise ConnectionError("Failed to connect to the inverter.")
 
         read_registers = {}
@@ -278,14 +279,14 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
             try:
                 read_registers.update(self.read(register))
             except Exception as e:
-                logger.error(f"Error reading register {register}: {e}")
+                self.logger.error(f"Error reading register {register}: {e}")
                 read_registers[register] = None
 
         # Disconnect after reading
         self.disconnect()
 
         # Apply scaling factors and store the scaled data
-        logger.debug("Read scaling factors and setting registers...")
+        self.logger.debug("Read scaling factors and setting registers...")
         for key, scale_key in REGISTER_SCALE_FACTORS.items():
             if key in read_registers and scale_key in read_registers:
                 scaled_value = round(
@@ -296,9 +297,9 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
             # Store the scaled value in the corresponding attribute
             if hasattr(self, key):
                 setattr(self, key, scaled_value)
-                logger.debug(f"\t{key:<40s} - {scaled_value}")
+                self.logger.debug(f"\t{key:<40s} - {scaled_value}")
             else:
-                logger.warning(f"Warning: Attribute {key} not found in class.")
+                self.logger.warning(f"Warning: Attribute {key} not found in class.")
 
     async def update_cashed_control_inverter_registers(self):
         """
@@ -306,13 +307,13 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         and stores the scaled data in the class attributes.
         """
         # Read poll registers
-        logger.info("Reading inverter poll registers from the inverter...")
+        self.logger.info("Reading inverter poll registers from the inverter...")
 
         # Initialize the connection
         self.connect()
 
         if not self.connected():
-            logger.error("Failed to connect to the inverter.")
+            self.logger.error("Failed to connect to the inverter.")
             raise ConnectionError("Failed to connect to the inverter.")
 
         read_registers = {}
@@ -320,14 +321,14 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
             try:
                 read_registers.update(self.read(register))
             except Exception as e:
-                logger.error(f"Error reading register {register}: {e}")
+                self.logger.error(f"Error reading register {register}: {e}")
                 read_registers[register] = None
 
         # Disconnect after reading
         self.disconnect()
 
         # Apply scaling factors and store the scaled data
-        logger.debug("Read scaling factors and setting registers...")
+        self.logger.debug("Read scaling factors and setting registers...")
         for key, scale_key in REGISTER_SCALE_FACTORS.items():
             if key in read_registers and scale_key in read_registers:
                 scaled_value = round(
@@ -338,15 +339,15 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
             # Store the scaled value in the corresponding attribute
             if hasattr(self, key):
                 setattr(self, key, scaled_value)
-                logger.debug(f"\t{key:<40s} - {scaled_value}")
+                self.logger.debug(f"\t{key:<40s} - {scaled_value}")
             else:
-                logger.warning(f"Warning: Attribute {key} not found in class.")
+                self.logger.warning(f"Warning: Attribute {key} not found in class.")
 
     def get_cashed_inverter_registers_as_json(self):
         """
         Returns the current status of registers as a JSON-like dictionary.
         """
-        logger.info("Get inverter registers as json")
+        self.logger.info("Get inverter registers as json")
 
         all_data = {}
         for attribute in dir(self):
@@ -363,7 +364,7 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         """
         Returns the current status of all poll registers as a JSON-like dictionary.
         """
-        logger.info("Get inverter poll registers as json")
+        self.logger.info("Get inverter poll registers as json")
 
         poll_data = {}
         for attribute in dir(self):
@@ -426,18 +427,18 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         """
 
         if not (0 <= limit <= 100):
-            logger.error(f"Limit must be between 0 and 100. Got: {limit}")
+            self.logger.error(f"Limit must be between 0 and 100. Got: {limit}")
             raise ValueError("Limit must be between 0 and 100.")
 
         # Initialize the connection
         self.connect()
 
         if not self.connected():
-            logger.error("Failed to connect to the inverter.")
+            self.logger.error("Failed to connect to the inverter.")
             raise ConnectionError("Failed to connect to the inverter.")
 
         # Set active power limit
-        logger.info(f"Setting active power limit to {limit}%")
+        self.logger.info(f"Setting active power limit to {limit}%")
         self.write("active_power_limit", limit)
 
         # Apply the setting
@@ -460,15 +461,15 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         self.connect()
 
         if not self.connected():
-            logger.error("Failed to connect to the inverter.")
+            self.logger.error("Failed to connect to the inverter.")
             raise ConnectionError("Failed to connect to the inverter.")
 
         # Restore defaults
-        logger.info("Restoring power control default settings...")
+        self.logger.info("Restoring power control default settings...")
         self.write("restore_power_control_default_settings", 1)
 
         # Set active power limit
-        logger.info("Revert setting active power limit to 100%")
+        self.logger.info("Revert setting active power limit to 100%")
         self.write("active_power_limit", 100)
 
         # Apply the setting

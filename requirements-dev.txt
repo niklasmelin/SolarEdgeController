@@ -5,3 +5,4 @@ pyserial-asyncio
 aioesphomeapi
 coverage
 flake8
+black

@@ -9,7 +9,7 @@ from aioesphomeapi import (
 )
 
 
-class EspReader:
+class ESPHomeReader:
     def __init__(
         self,
         host: str,
@@ -234,7 +234,7 @@ class EspReader:
         """
         return self.states.copy()
 
-    def get_data_as_json(self) -> dict:
+    def get_sensor_data_as_json(self) -> dict:
         """
 
         Return the latest ESPHome sensor data in a human-friendly JSON-like format.
@@ -315,6 +315,43 @@ class EspReader:
             }
 
         return data
+
+    def get_data_as_json(self) -> dict[str, tuple[object, float | None]]:
+        """
+        Return a simplified mapping of sensor object_id → (value, last_updated).
+
+        Example output:
+            {
+                "momentary_active_import": (1.6, 1768140230.9362214),
+                "voltage_phase_1": (227.7, 1768140230.9363801),
+                ...
+            }
+
+        Note
+        ----
+        - For sensors that have never reported a value, the value will be "<no value>"
+        and the timestamp will be None.
+        - This method does not perform any I/O and returns immediately.
+        """
+        if not self._connected:
+            raise RuntimeError(
+                "ESPHome device not connected. Call ensure_connected() first."
+            )
+
+        simplified: dict[str, tuple] = {}
+
+        for key, (obj_id, name, unit, kind) in self.meta.items():
+            state = self.states.get(key)
+
+            if state is None:
+                # Not reported yet
+                simplified[obj_id] = ("<no value>", None)
+            else:
+                val = state["value"]
+                ts = state["last_updated"]
+                simplified[obj_id] = (val, ts)
+
+        return simplified
 
 
 # ------------------- EXAMPLE USAGE -------------------
