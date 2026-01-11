@@ -3,3 +3,5 @@ pymodbus==3.5.4
 pyserial
 pyserial-asyncio
 aioesphomeapi
+coverage
+flake8

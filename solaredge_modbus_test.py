@@ -1,89 +1,80 @@
-# import solaredge_modbus
-# inverter=solaredge_modbus.Inverter(device="/dev/ttyUSB0", baud=9600)
+import numpy as np
+import matplotlib.pyplot as plt
+from collections import deque
 
-# inverter.connect()
-# inverter.connected()
+# ---------------- CONFIG ----------------
+PEAK_PRODUCTION_W = 10500        # Inverter max power (100%)
+MIN_PRODUCTION_W = 300           # Minimum production
+MAX_EXPORT_W = 200               # Maximum allowed export
+MAX_DELTA_PERCENT = 15           # Max change per 10 seconds
+BUFFER_SIZE = 5                  # Cyclic buffer length
+SAMPLES = 60                     # 10 minutes, 10 sec intervals
+LIMIT_EXPORT = True
+# ---------------------------------------
 
-# inverter.read("current")
-# registers = inverter.read_all()
+# Generate sample solar production (sinusoidal-ish for variability)
+time_sec = np.arange(0, SAMPLES*10, 10)
+solar_production = 5000 + 5000 * np.sin(np.linspace(0, 2*np.pi, SAMPLES))  # 0-10000 W approx
+solar_production = np.clip(solar_production, 0, PEAK_PRODUCTION_W)
 
-# print(registers)
+# Generate house consumption (random between 200-8000 W)
+np.random.seed(42)
+house_consumption = np.random.randint(200, 8000, size=SAMPLES)
 
-# for register, value in registers.items():
-#     print(f' {register:<40} - {value}')
-import time
-import random
-from src.SolarEdgeInverter import SolarEdgeInverter
+# Cyclic buffer for smoothing export
+export_buffer = deque(maxlen=BUFFER_SIZE)
+smoothed_export_list = []
+limit_factor_list = []
 
-se_inverter = SolarEdgeInverter(device="/dev/ttyUSB0", baud=9600, timeout=2)
-se_inverter.print_inverter_data()
-se_inverter.print_all()
-# a = se_inverter.get_inverter_poll_registers_as_json()
-# print(a)
-# b = se_inverter.get_inverter_registers_as_json()
-# print(b)
+last_percent = 100  # start at 100%
 
-print(f"\n\nRegister commit_power_control_settings: {se_inverter.read('commit_power_control_settings')}")
-
-limit = random.randint(10,90)
-
-print(f"\nSet active power limit to {limit}%")
-se_inverter.set_production_limit(limit)
-
-now = time.time()
-for i in range(8):
-    print(f" After setting production limit to {limit} % and {time.time()-now}s wait")
-    print(f"   Register commit_power_control_settings: {se_inverter.read('commit_power_control_settings')}")
-    print(f"   Register active_power_limit: {se_inverter.read('active_power_limit')}")
-
-print(f"\nSet active power limit to 100%")
-se_inverter.set_restore_power_control_defaults()
-
-limit = 100
-for i in range(8):
-    print(f" After setting production limit to {limit} % and {time.time()-now}s wait")
-    print(f"   Register commit_power_control_settings: {se_inverter.read('commit_power_control_settings')}")
-    print(f"   Register active_power_limit: {se_inverter.read('active_power_limit')}")
-
-
-# Set limit multiple times
-
-for i in range(4):
-    limit = random.randint(10,90)
-    print(f"\nSet active power limit to {limit}%")
-    se_inverter.set_production_limit(limit)    
-    print(f" After setting production limit to {limit} % and {time.time()-now}s wait")
-    print(f"   Register commit_power_control_settings: {se_inverter.read('commit_power_control_settings')}")
-    print(f"   Register active_power_limit: {se_inverter.read('active_power_limit')}")
-    time.sleep(2)
-
-
-print(f"\nSet active power limit to 100%")
-se_inverter.set_restore_power_control_defaults()
-print(f" After setting production limit to 100% -  {se_inverter.read('active_power_limit')}")
-time.sleep(1)
-print(f" After setting production limit to 100% -  {se_inverter.read('active_power_limit')}")
-print(f"   Register commit_power_control_settings: {se_inverter.read('commit_power_control_settings')}")
-print(f" After setting production limit to 100% -  {se_inverter.read('active_power_limit')}")
-time.sleep(8)
-print(f" 8 - After setting production limit to 100% -  {se_inverter.read('active_power_limit')}")
-
-
-
-se_inverter._read_inverter_all()
-se_inverter.print_all()
-
-
-
-total_time = 0
-currents = ["current", "l1_current", "l2_current", "l3_current","l1_voltage", "l2_voltage", "l3_voltage", "l1n_voltage", "l2n_voltage", "l3n_voltage"]
-for i in range(1):
-    now = time.time()
-    a = []
-    for register in currents:
-        a.append(se_inverter.read(register))
+for i in range(SAMPLES):
+    # Calculate grid export
+    momentary_export = solar_production[i] - house_consumption[i]
     
-    cycle =  time.time()-now
-    total_time += cycle
+    # Apply cyclic buffer moving average
+    export_buffer.append(momentary_export)
+    smoothed_export = sum(export_buffer)/len(export_buffer)
+    smoothed_export_list.append(smoothed_export)
     
-    print(a,cycle, cycle/len(currents), total_time)
+    # Compute limit factor
+    if LIMIT_EXPORT:
+        # Compute minimum production percent
+        min_percent = (MIN_PRODUCTION_W / PEAK_PRODUCTION_W) * 100
+        # Desired percent to limit export
+        desired_percent = max(
+            min_percent,
+            100 - ((smoothed_export - MAX_EXPORT_W)/PEAK_PRODUCTION_W*100)
+        )
+        # Rate limit
+        delta = desired_percent - last_percent
+        if delta > MAX_DELTA_PERCENT:
+            desired_percent = last_percent + MAX_DELTA_PERCENT
+        elif delta < -MAX_DELTA_PERCENT:
+            desired_percent = last_percent - MAX_DELTA_PERCENT
+        # Clamp
+        desired_percent = max(min_percent, min(100, desired_percent))
+        last_percent = desired_percent
+    else:
+        desired_percent = 100
+        
+    limit_factor_list.append(desired_percent)
+
+# Compute limited production (for visualization)
+limited_production = np.array(solar_production) * np.array(limit_factor_list)/100
+grid_export = limited_production - house_consumption
+
+# ---------------- PLOT ----------------
+plt.figure(figsize=(15,8))
+plt.plot(time_sec/60, solar_production, label="Solar Production [W]", color="gold")
+plt.plot(time_sec/60, house_consumption, label="House Consumption [W]", color="orange")
+plt.plot(time_sec/60, smoothed_export_list, label="Smoothed Grid Export [W]", color="red", linestyle='--')
+plt.plot(time_sec/60, grid_export, label="Limited Grid Export [W]", color="green")
+plt.plot(time_sec/60, np.array(limit_factor_list)/100*PEAK_PRODUCTION_W, 
+         label="Production Limit Factor [% of peak]", color="blue", linestyle=':')
+plt.xlabel("Time [minutes]")
+plt.ylabel("Power [W]")
+plt.title("Export Limiter Simulation")
+plt.legend()
+plt.grid(True)
+plt.show()
