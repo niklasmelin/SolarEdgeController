@@ -1,4 +1,4 @@
-import asyncio
+# import asyncio
 import logging
 import solaredge_modbus
 
@@ -350,7 +350,10 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
 
         all_data = {}
         for attribute in dir(self):
-            if (attribute in SUNSPEC_REGISTERS + INVERTER_POLL_REGISTERS and not callable(getattr(self, attribute))):
+            if (
+                attribute in SUNSPEC_REGISTERS + INVERTER_POLL_REGISTERS
+                and not callable(getattr(self, attribute))
+            ):
                 value = getattr(self, attribute)
                 all_data[attribute] = value
 
@@ -393,7 +396,10 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         )
         for attribute in dir(self):
             if (
-                not attribute.startswith("_") and not callable(getattr(self, attribute)) and attribute not in ["registers", "battery_dids", "client", "meter_dids", "logger"]
+                not attribute.startswith("_")
+                and not callable(getattr(self, attribute))
+                and attribute
+                not in ["registers", "battery_dids", "client", "meter_dids", "logger"]
             ):
                 value = getattr(self, attribute)
                 print(f"\t{attribute:<40}: {value}")
