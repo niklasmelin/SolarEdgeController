@@ -26,3 +26,7 @@ It is designed for:
 
 ```python
 class EspReader:
+    
+export PYTHONPATH="$PWD/src"
+$env:PYTHONPATH="$PWD/src"
+python -m solar_controller.main

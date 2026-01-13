@@ -32,6 +32,7 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         # Setup logger
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.info("Initializing SolarEdgeInverter...")
+        
 
         # Initialize base class (creates client etc.)
         super().__init__(device=device, baud=baud, timeout=timeout)

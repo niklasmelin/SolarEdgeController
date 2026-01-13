@@ -71,7 +71,15 @@ class ESPHomeReader:
 
     # ---------- INTERNAL CALLBACK ----------
     def _on_state(self, msg: Any) -> None:
-        """Callback for ESPHome state updates."""
+        """
+        Callback for ESPHome state updates. This method is called by the ESPHome client when a new state update is received. It extracts the key, value, and last updated timestamp from the message and stores it in the internal cache.
+
+        Parameters:
+        -----------
+        msg (Any): The ESPHome message containing the state update.
+
+        Returns: None
+        """
         key = getattr(msg, "key", None)
         if key not in self.meta:
             return
@@ -171,8 +179,8 @@ class ESPHomeReader:
         while not self._connected:
             try:
                 await self.connect()
-            except APIConnectionError:
-                self.logger.warning("Retrying ESPHome connection in %.1fs", self.reconnect_delay)
+            except APIConnectionError as e:
+                self.logger.warning(f"Retrying ESPHome connection in {self.reconnect_delay}s, problem encountered {e}")
                 await asyncio.sleep(self.reconnect_delay)
                 continue
 
@@ -356,7 +364,7 @@ class ESPHomeReader:
 
 # ------------------- EXAMPLE USAGE -------------------
 async def main():
-    reader = EspReader(
+    reader = ESPHomeReader(
         host="192.168.1.2",
         port=6053,
         encryption_key="abcabcabcabcabcabcabcabcabcabcabcabcabcabca=",
