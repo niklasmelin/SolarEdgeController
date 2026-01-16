@@ -1,5 +1,7 @@
 from enum import Enum
-from typing import Dict, Any
+from dataclasses import dataclass
+from typing import Optional, Dict
+
 
 class PollGroup(Enum):
     IDENTITY = "identity"
@@ -7,84 +9,209 @@ class PollGroup(Enum):
     CONTROL = "control"
     STATUS = "status"
 
-# -------------------------------
-# All registers
-# -------------------------------
-REGISTERS: Dict[str, Dict[str, Any]] = {
+
+# -----------------------------------
+# Home Assistant metadata
+# -----------------------------------
+@dataclass(frozen=True)
+class HARegisterMeta:
+    unit: Optional[str]
+    device_class: Optional[str]
+    state_class: Optional[str]
+    entity_category: Optional[str]
+    icon: Optional[str]
+    friendly_name: Optional[str] = None
+    description: Optional[str] = None
+
+
+# -----------------------------------
+# Register definition
+# -----------------------------------
+@dataclass(frozen=True)
+class RegisterDef:
+    scale: Optional[str]
+    group: PollGroup
+    ha: Optional[HARegisterMeta] = None
+
+
+# -----------------------------------
+# Registers
+# -----------------------------------
+REGISTERS: Dict[str, RegisterDef] = {
+    # -------------------------------
     # SunSpec identity
-    "c_id": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_did": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_length": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_manufacturer": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_model": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_version": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_serialnumber": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_deviceaddress": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_sunspec_did": {"scale": None, "group": PollGroup.IDENTITY},
-    "c_sunspec_length": {"scale": None, "group": PollGroup.IDENTITY},
+    # -------------------------------
+    "c_id": RegisterDef(None, PollGroup.IDENTITY),
+    "c_did": RegisterDef(None, PollGroup.IDENTITY),
+    "c_length": RegisterDef(None, PollGroup.IDENTITY),
+    "c_manufacturer": RegisterDef(None, PollGroup.IDENTITY),
+    "c_model": RegisterDef(None, PollGroup.IDENTITY),
+    "c_version": RegisterDef(None, PollGroup.IDENTITY),
+    "c_serialnumber": RegisterDef(None, PollGroup.IDENTITY),
+    "c_deviceaddress": RegisterDef(None, PollGroup.IDENTITY),
+    "c_sunspec_did": RegisterDef(None, PollGroup.IDENTITY),
+    "c_sunspec_length": RegisterDef(None, PollGroup.IDENTITY),
 
-    # Poll registers (AC/DC measurements)
-    "current": {"scale": "current_scale", "group": PollGroup.POLL},
-    "l1_current": {"scale": "current_scale", "group": PollGroup.POLL},
-    "l2_current": {"scale": "current_scale", "group": PollGroup.POLL},
-    "l3_current": {"scale": "current_scale", "group": PollGroup.POLL},
+    # -------------------------------
+    # POLL – AC currents
+    # -------------------------------
+    "current": RegisterDef(
+        "current_scale",
+        PollGroup.POLL,
+        HARegisterMeta("A", "current", "measurement", None, "mdi:current-ac",
+                       "Total Current", "Total AC current output of the inverter"),
+    ),
+    "l1_current": RegisterDef(
+        "current_scale",
+        PollGroup.POLL,
+        HARegisterMeta("A", "current", "measurement", None, "mdi:current-ac",
+                       "L1 Current", "AC current on phase L1"),
+    ),
+    "l2_current": RegisterDef(
+        "current_scale",
+        PollGroup.POLL,
+        HARegisterMeta("A", "current", "measurement", None, "mdi:current-ac",
+                       "L2 Current", "AC current on phase L2"),
+    ),
+    "l3_current": RegisterDef(
+        "current_scale",
+        PollGroup.POLL,
+        HARegisterMeta("A", "current", "measurement", None, "mdi:current-ac",
+                       "L3 Current", "AC current on phase L3"),
+    ),
 
-    "l1_voltage": {"scale": "voltage_scale", "group": PollGroup.POLL},
-    "l2_voltage": {"scale": "voltage_scale", "group": PollGroup.POLL},
-    "l3_voltage": {"scale": "voltage_scale", "group": PollGroup.POLL},
+    # -------------------------------
+    # POLL – AC voltages
+    # -------------------------------
+    "l1_voltage": RegisterDef(
+        "voltage_scale",
+        PollGroup.POLL,
+        HARegisterMeta("V", "voltage", "measurement", None, "mdi:sine-wave",
+                       "L1-L2 Voltage", "Voltage between phase L1 and L2"),
+    ),
+    "l2_voltage": RegisterDef(
+        "voltage_scale",
+        PollGroup.POLL,
+        HARegisterMeta("V", "voltage", "measurement", None, "mdi:sine-wave",
+                       "L2-L3 Voltage", "Voltage between phase L2 and L3"),
+    ),
+    "l3_voltage": RegisterDef(
+        "voltage_scale",
+        PollGroup.POLL,
+        HARegisterMeta("V", "voltage", "measurement", None, "mdi:sine-wave",
+                       "L3-L1 Voltage", "Voltage between phase L3 and L1"),
+    ),
+    "l1n_voltage": RegisterDef(
+        "voltage_scale",
+        PollGroup.POLL,
+        HARegisterMeta("V", "voltage", "measurement", None, "mdi:sine-wave",
+                       "L1-N Voltage", "Voltage measured from Phase 1 to Neutral"),
+    ),
+    "l2n_voltage": RegisterDef(
+        "voltage_scale",
+        PollGroup.POLL,
+        HARegisterMeta("V", "voltage", "measurement", None, "mdi:sine-wave",
+                       "L2-N Voltage", "Voltage measured from Phase 2 to Neutral"),
+    ),
+    "l3n_voltage": RegisterDef(
+        "voltage_scale",
+        PollGroup.POLL,
+        HARegisterMeta("V", "voltage", "measurement", None, "mdi:sine-wave",
+                       "L3-N Voltage", "Voltage measured from Phase 3 to Neutral"),
+    ),
 
-    "l1n_voltage": {"scale": "voltage_scale", "group": PollGroup.POLL},
-    "l2n_voltage": {"scale": "voltage_scale", "group": PollGroup.POLL},
-    "l3n_voltage": {"scale": "voltage_scale", "group": PollGroup.POLL},
+    # -------------------------------
+    # POLL – AC power
+    # -------------------------------
+    "power_ac": RegisterDef(
+        "power_ac_scale",
+        PollGroup.POLL,
+        HARegisterMeta("W", "power", "measurement", None, "mdi:solar-power",
+                       "AC Power", "Total AC power output of the inverter"),
+    ),
+    "power_apparent": RegisterDef(
+        "power_apparent_scale",
+        PollGroup.POLL,
+        HARegisterMeta("VA", "apparent_power", "measurement", None, "mdi:flash",
+                       "Apparent Power", "Total AC apparent power (VA)"),
+    ),
+    "power_reactive": RegisterDef(
+        "power_reactive_scale",
+        PollGroup.POLL,
+        HARegisterMeta("var", "reactive_power", "measurement", None, "mdi:flash-outline",
+                       "Reactive Power", "Total reactive power (VAR)"),
+    ),
+    "power_factor": RegisterDef(
+        "power_factor_scale",
+        PollGroup.POLL,
+        HARegisterMeta(None, "power_factor", "measurement", None, "mdi:cosine-wave",
+                       "Power Factor", "Ratio of real power to apparent power"),
+    ),
 
-    "power_ac": {"scale": "power_ac_scale", "group": PollGroup.POLL},
-    "power_apparent": {"scale": "power_apparent_scale", "group": PollGroup.POLL},
-    "power_reactive": {"scale": "power_reactive_scale", "group": PollGroup.POLL},
-    "power_factor": {"scale": "power_factor_scale", "group": PollGroup.POLL},
+    # -------------------------------
+    # POLL – frequency
+    # -------------------------------
+    "frequency": RegisterDef(
+        "frequency_scale",
+        PollGroup.POLL,
+        HARegisterMeta("Hz", "frequency", "measurement", None, "mdi:sine-wave",
+                       "Grid Frequency", "AC grid frequency in Hz"),
+    ),
 
-    "frequency": {"scale": "frequency_scale", "group": PollGroup.POLL},
-    "energy_total": {"scale": "energy_total_scale", "group": PollGroup.POLL},
+    # -------------------------------
+    # POLL – energy (lifetime)
+    # -------------------------------
+    "energy_total": RegisterDef(
+        "energy_total_scale",
+        PollGroup.POLL,
+        HARegisterMeta("Wh", "energy", "total_increasing", None, "mdi:counter",
+                       "Total Energy", "Cumulative energy produced by inverter"),
+    ),
 
-    "current_dc": {"scale": "current_dc_scale", "group": PollGroup.POLL},
-    "voltage_dc": {"scale": "voltage_dc_scale", "group": PollGroup.POLL},
-    "power_dc": {"scale": "power_dc_scale", "group": PollGroup.POLL},
+    # -------------------------------
+    # POLL – DC side
+    # -------------------------------
+    "current_dc": RegisterDef(
+        "current_dc_scale",
+        PollGroup.POLL,
+        HARegisterMeta("A", "current", "measurement", None, "mdi:current-dc",
+                       "DC Current", "DC current from PV array"),
+    ),
+    "voltage_dc": RegisterDef(
+        "voltage_dc_scale",
+        PollGroup.POLL,
+        HARegisterMeta("V", "voltage", "measurement", None, "mdi:current-dc",
+                       "DC Voltage", "DC voltage from PV array"),
+    ),
+    "power_dc": RegisterDef(
+        "power_dc_scale",
+        PollGroup.POLL,
+        HARegisterMeta("W", "power", "measurement", None, "mdi:solar-power-variant",
+                       "DC Power", "DC power from PV array"),
+    ),
 
-    "temperature": {"scale": "temperature_scale", "group": PollGroup.POLL},
+    # -------------------------------
+    # POLL – temperature
+    # -------------------------------
+    "temperature": RegisterDef(
+        "temperature_scale",
+        PollGroup.POLL,
+        HARegisterMeta("°C", "temperature", "measurement", None, "mdi:thermometer",
+                       "Inverter Temperature", "Internal temperature of inverter"),
+    ),
 
-    # Status registers
-    "status": {"scale": None, "group": PollGroup.STATUS},
-    "vendor_status": {"scale": None, "group": PollGroup.STATUS},
-    "rrcr_state": {"scale": None, "group": PollGroup.STATUS},
-    "active_power_limit": {"scale": None, "group": PollGroup.STATUS},
-    "cosphi": {"scale": None, "group": PollGroup.STATUS},
-    "commit_power_control_settings": {"scale": None, "group": PollGroup.STATUS},
-    "restore_power_control_default_settings": {"scale": None, "group": PollGroup.STATUS},
-    "reactive_power_config": {"scale": None, "group": PollGroup.STATUS},
-    "reactive_power_response_time": {"scale": None, "group": PollGroup.STATUS},
-    "advanced_power_control_enable": {"scale": None, "group": PollGroup.STATUS},
-    "export_control_mode": {"scale": None, "group": PollGroup.STATUS},
-    "export_control_limit_mode": {"scale": None, "group": PollGroup.STATUS},
-    "export_control_site_limit": {"scale": None, "group": PollGroup.STATUS},
-    "storage_control_mode": {"scale": None, "group": PollGroup.STATUS},
-    "storage_ac_charge_policy": {"scale": None, "group": PollGroup.STATUS},
-    "storage_ac_charge_limit": {"scale": None, "group": PollGroup.STATUS},
-    "storage_backup_reserved_setting": {"scale": None, "group": PollGroup.STATUS},
-    "storage_default_mode": {"scale": None, "group": PollGroup.STATUS},
-    "rc_cmd_timeout": {"scale": None, "group": PollGroup.STATUS},
-    "rc_cmd_mode": {"scale": None, "group": PollGroup.STATUS},
-    "rc_charge_limit": {"scale": None, "group": PollGroup.STATUS},
-    "rc_discharge_limit": {"scale": None, "group": PollGroup.STATUS},
-
-    # Scaling factors
-    "current_scale": {"scale": None, "group": PollGroup.POLL},
-    "voltage_scale": {"scale": None, "group": PollGroup.POLL},
-    "power_ac_scale": {"scale": None, "group": PollGroup.POLL},
-    "power_dc_scale": {"scale": None, "group": PollGroup.POLL},
-    "energy_total_scale": {"scale": None, "group": PollGroup.POLL},
-    "temperature_scale": {"scale": None, "group": PollGroup.POLL},
-    "frequency_scale": {"scale": None, "group": PollGroup.POLL},
-    "power_apparent_scale": {"scale": None, "group": PollGroup.POLL},
-    "power_reactive_scale": {"scale": None, "group": PollGroup.POLL},
-    "power_factor_scale": {"scale": None, "group": PollGroup.POLL},
-    "current_dc_scale": {"scale": None, "group": PollGroup.POLL},
+    # -------------------------------
+    # Scaling registers (internal only)
+    # -------------------------------
+    "current_scale": RegisterDef(None, PollGroup.POLL),
+    "voltage_scale": RegisterDef(None, PollGroup.POLL),
+    "power_ac_scale": RegisterDef(None, PollGroup.POLL),
+    "power_dc_scale": RegisterDef(None, PollGroup.POLL),
+    "energy_total_scale": RegisterDef(None, PollGroup.POLL),
+    "temperature_scale": RegisterDef(None, PollGroup.POLL),
+    "frequency_scale": RegisterDef(None, PollGroup.POLL),
+    "power_apparent_scale": RegisterDef(None, PollGroup.POLL),
+    "power_reactive_scale": RegisterDef(None, PollGroup.POLL),
+    "power_factor_scale": RegisterDef(None, PollGroup.POLL),
+    "current_dc_scale": RegisterDef(None, PollGroup.POLL),
 }

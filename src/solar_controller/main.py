@@ -99,7 +99,7 @@ async def main():
 
     finally:
         await reader.disconnect()
-        await inverter.disconnect()
+        # await inverter.disconnect()
 
 
 if __name__ == "__main__":
