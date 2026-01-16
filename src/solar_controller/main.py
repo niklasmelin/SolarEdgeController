@@ -82,7 +82,7 @@ async def main():
 
         # Get ESPHome device
         grid_sensors = reader.get_sensor_data_as_json()
-        print(grid_sensors)
+        print("\nGrid sensors:")
         for info in grid_sensors.values():
             print(
                 f"\t{info['object_id']:<36} "
@@ -92,7 +92,7 @@ async def main():
             )
         # Get SolarEdge inverter data
         solaredge_sensors = inverter.get_registers_as_json()
-        print(solaredge_sensors)
+        print("\n SolarEdge sensors:")
         for key, value in solaredge_sensors.items():
             val_display = "<no value>" if value is None else value
             print(f"\t{key:<36} {val_display:>12}")
