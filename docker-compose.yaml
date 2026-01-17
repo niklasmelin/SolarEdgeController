@@ -1,0 +1,17 @@
+services:
+  solar-controller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: solar_controller
+    environment:
+      - PYTHONPATH=/app/src
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./run.sh:/app/run.sh
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"  # map host USB to container
+    tty: true
+    stdin_open: true
+    command: python -m solar_controller.main

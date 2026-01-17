@@ -15,6 +15,16 @@ SRC_DIR := src/solar_controller
 TEST_DIR := tests
 
 # --------------------------------------------------------------------
+# Docker image settings
+# --------------------------------------------------------------------
+IMAGE_NAME := solar_controller
+PYPROJECT := pyproject.toml
+
+# Retrieve version from pyproject.toml
+VERSION := $(shell $(PY) -c "import tomllib; print(tomllib.load(open('$(PYPROJECT)','rb'))['project']['version'])")
+
+
+# --------------------------------------------------------------------
 # Default target
 # --------------------------------------------------------------------
 .PHONY: all
@@ -86,6 +96,28 @@ clean:
 	rm -rf htmlcov
 	rm -rf coverage.xml
 	rm -rf $(VENV_DIR)
+
+# --------------------------------------------------------------------
+# Build Docker image
+# --------------------------------------------------------------------
+
+.PHONY: docker-build
+docker-build:
+	@echo "Building Docker image $(IMAGE_NAME) with tags: latest and $(VERSION)..."
+	docker build -t $(IMAGE_NAME):latest -t $(IMAGE_NAME):$(VERSION) .
+
+IMAGE_PATTERN := solaredgecontroller-solar-controller
+
+.PHONY: docker-clean
+docker-clean:
+	@echo "Stopping and removing all containers for images matching $(IMAGE_PATTERN)..."
+	-docker ps -a --filter "ancestor=$(IMAGE_PATTERN)" -q | xargs -r docker rm -f
+
+	@echo "Removing all images matching $(IMAGE_PATTERN)..."
+	-docker images --format "{{.Repository}}:{{.Tag}}" | grep "$(IMAGE_PATTERN)" | xargs -r docker rmi -f
+
+	@echo "Docker cleanup complete."
+
 
 # --------------------------------------------------------------------
 # Help

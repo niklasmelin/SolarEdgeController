@@ -56,7 +56,7 @@ async def main():
             logging.debug(f"Current grid consumption: {grid_consumption} W")
 
             # Compute current home consumption
-            home_consumption = solar_production - grid_consumption
+            home_consumption = abs(solar_production - grid_consumption)
             logging.debug(f"Current home consumption: {home_consumption} W")
 
             # Compute new scale factor

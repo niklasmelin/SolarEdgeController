@@ -1,0 +1,46 @@
+[tool.ruff]
+# Base configuration translated from your previous flake8 config
+exclude = [
+    ".git",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "build",
+    "dist",
+]
+# ignore E501 (line length) and W503 (line break before binary operator)
+ignore = ["E501", "W503"]
+# Optional: line-length setting, commented out for now
+# line-length = 88
+
+[tool.ruff.per-file-ignores]
+# Add any per-file ignores here if needed
+# e.g., "tests/*" = ["F401"]
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solar_controller"
+version = "0.1.0"
+description = "Python package for controlling and monitoring SolarEdge inverters"
+authors = [
+    { name = "Niklas", email = "niklas@example.com" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "pyserial>=3.5",
+    "pytest-asyncio>=0.21",
+    "pytest>=7.0",
+    "pydantic>=2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest-cov>=4.0",
+    "ruff>=0.0.300",      # Linter
+    "ipython>=8.0",
+]
