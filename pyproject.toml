@@ -32,6 +32,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
+    "aiohttp>=3.9",
     "confuse>=2.1.0",
     "uv",
     "pyserial>=3.5",

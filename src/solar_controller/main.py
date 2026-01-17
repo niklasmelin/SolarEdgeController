@@ -4,6 +4,7 @@ import sys
 
 from solar_controller.logger import setup_logger
 from solar_controller.config import load_config
+from solar_controller.server import start_server, STATUS
 from solar_controller.factories.sensor_factory import create_sensor
 from solar_controller.factories.inverter_factory import create_inverter
 from solar_controller.controller.solar_regulator import SolarRegulator
@@ -24,6 +25,9 @@ async def main():
     inverter = create_inverter(config.inverter)
     regulator = SolarRegulator()
 
+    # Start HTTP heartbeat server
+    asyncio.create_task(start_server())
+
     try:
         # Connect to the ESPHome device
         await reader.ensure_connected()
@@ -36,7 +40,7 @@ async def main():
             logging.error("Failed to connect to SolarEdge inverter.")
             sys.exit(1)
 
-        for i in range(1):
+        for i in range(10):
             # Read data from inverter
             await inverter.read_all_registers()
             inverter_data = inverter.get_registers_as_json()
@@ -75,6 +79,14 @@ async def main():
                 f"Solar Production = {solar_production} W, "
                 f"New Scale Factor = {scale_factor} %"
             )
+            
+            # Update shared STATUS dictionary for the server
+            STATUS.update({
+                "grid_consumption": grid_consumption,
+                "home_consumption": home_consumption,
+                "solar_production": solar_production,
+                "new_scale_factor": scale_factor,
+            })
 
             # allow time for the device to push current states
             await asyncio.sleep(1)

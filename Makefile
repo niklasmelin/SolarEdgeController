@@ -129,12 +129,15 @@ docker-clean:
 .PHONY: help
 help:
 	@echo "Usage:"
-	@echo "  make venv             # Create virtual environment"
-	@echo "  make dev              # Create venv + install dev requirements"
+	@echo "  make venv             # Create virtual environment and install base requirements"
+	@echo "  make dev              # Create venv + install development requirements"
 	@echo "  make test             # Run all tests (PYTHONPATH=src)"
-	@echo "  make test-async       # Run async tests (PYTHONPATH=src)"
-	@echo "  make coverage         # Run tests with coverage (PYTHONPATH=src)"
+	@echo "  make test-async       # Run async tests with pytest-asyncio (PYTHONPATH=src)"
+	@echo "  make coverage         # Run tests with coverage report (PYTHONPATH=src)"
 	@echo "  make lint             # Check code style with ruff"
 	@echo "  make lint-fix         # Auto-fix linting issues with ruff"
 	@echo "  make run              # Run main application (PYTHONPATH=src)"
-	@echo "  make clean            # Remove temporary files and venv"
+	@echo "  make clean            # Remove temporary files, cache, and venv"
+	@echo "  make docker-build     # Build Docker image $(IMAGE_NAME) with tags 'latest' and '$(VERSION)'"
+	@echo "  make docker-clean     # Stop and remove all containers/images matching $(IMAGE_PATTERN)"
+

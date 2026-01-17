@@ -6,6 +6,8 @@ services:
     container_name: solar_controller
     environment:
       - PYTHONPATH=/app/src
+    ports:
+      - "8080:8080"
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
