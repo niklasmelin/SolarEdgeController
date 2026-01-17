@@ -1,4 +1,3 @@
-import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from solar_controller.inverter.solaredge_inverter import SolarEdgeInverter

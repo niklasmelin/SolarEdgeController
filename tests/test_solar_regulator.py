@@ -54,7 +54,9 @@ def test_ramp_limit_enforced(regulator):
     limited_power_change = regulator.last_limited_power - 1000
     assert abs(limited_power_change) <= regulator.max_step_watt
 
-
+    # Scale factor must be in 0-100%
+    assert 0 <= sf <= 100
+    
 # ------------------------
 # Physical constraints (min/max)
 # ------------------------

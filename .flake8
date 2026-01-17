@@ -1,3 +1,0 @@
-[flake8]
-exclude = .git, .venv, .vscode, __pycache__, build, dist
-ignore = E501, W503
