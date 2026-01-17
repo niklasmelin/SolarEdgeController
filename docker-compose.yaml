@@ -10,6 +10,7 @@ services:
       - ./src:/app/src
       - ./tests:/app/tests
       - ./run.sh:/app/run.sh
+      - ./config.yaml:/app/config.yaml
     devices:
       - "/dev/ttyUSB0:/dev/ttyUSB0"  # map host USB to container
     tty: true

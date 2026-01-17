@@ -1,9 +1,11 @@
 from solar_controller.sensors.esphome_reader import ESPHomeReader
+from solar_controller.config import ESPSensorConfig
 
-def create_sensor(config):
-    """Simple Factory: instantiate the configured sensor."""
+
+def create_sensor(config: ESPSensorConfig) -> ESPHomeReader:
+    """Instantiate the configured ESPHome sensor."""
     return ESPHomeReader(
-        host=config.ESP_READER_HOST,
-        port=config.ESP_READERPORT,
-        encryption_key=config.ESP_READERENCRYPTION_KEY,
+        host=config.reader_host,
+        port=config.reader_port,
+        encryption_key=config.encryption_key,
     )

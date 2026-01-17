@@ -39,6 +39,10 @@ venv:
 	$(PYTHON) -m venv $(VENV_DIR)
 	@echo "Upgrading pip..."
 	$(PIP) install --upgrade pip
+	@echo "Installing development requirements..."
+	$(PIP) install -r requirements.txt
+	$(PIP) install uv
+
 
 .PHONY: dev
 dev: venv

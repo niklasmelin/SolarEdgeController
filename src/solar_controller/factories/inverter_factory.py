@@ -1,9 +1,13 @@
 from solar_controller.inverter.solaredge_inverter import SolarEdgeInverter
+from solar_controller.config import InverterConfig
 
-def create_inverter(config):
-    """Simple Factory: instantiate the configured inverter."""
+
+def create_inverter(config: InverterConfig) -> SolarEdgeInverter:
+    """
+    Instantiate the configured inverter.
+    """
     return SolarEdgeInverter(
-        device=config.SOLAR_EDGE_INVERTER_DEVICE,
-        baud=config.SOLAR_EDGE_INVERTER_BAUD,
-        timeout=config.SOLAR_EDGE_INVERTER_TIMEOUT,
+        device=config.device,
+        baud=config.baud,
+        timeout=config.timeout,
     )

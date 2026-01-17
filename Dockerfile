@@ -17,5 +17,5 @@ COPY --from=builder /opt/venv /opt/venv
 COPY src/ ./src
 COPY run.sh ./
 ENV PATH="/opt/venv/bin:${PATH}"
-
+ENV DOCKER=True
 CMD ["python", "-m", "solar_controller.main"]

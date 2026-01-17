@@ -28,8 +28,8 @@ It is designed for:
 class EspReader:
 ```
     
-export PYTHONPATH="$PWD/src"
-$env:PYTHONPATH="$PWD/src"
+export PYTHONPATH="$PWD/src"  
+$env:PYTHONPATH="$PWD/src"  
 python -m solar_controller.main
 
 
@@ -294,3 +294,120 @@ All interactions are mediated exclusively through:
 - `get_ha_sensors()` for observability
 
 This ensures maintainability, extensibility, and a clean separation of concerns.
+
+Development and Deployment
+==========================
+
+This project provides a Makefile and Docker Compose setup to simplify development, testing, and running the Solar Controller application.
+
+1. Makefile
+-----------
+
+The Makefile provides common tasks for development, testing, linting, and Docker management.
+
+### Usage
+```bash
+# Create a Python virtual environment
+make venv
+
+# Set up development environment (venv + dependencies)
+make dev
+
+# Run all tests (synchronous and asynchronous)
+make test
+make test-async
+
+# Run tests with coverage
+make coverage
+
+# Lint the code using Ruff
+make lint
+
+# Automatically fix linting issues
+make lint-fix
+
+# Run the main application locally (requires PYTHONPATH=src)
+make run
+
+# Build the Docker image (tags: latest and version from pyproject.toml)
+make docker-build
+
+# Clean Docker images and containers for this project
+make docker-clean
+
+# Remove temporary files, caches, and the virtual environment
+make clean
+```
+
+### Notes
+
+- PYTHONPATH=src is automatically set when running `make test` or `make run` to support the src layout.
+- The Docker build uses both the latest tag and the version from pyproject.toml.
+- docker-clean removes all containers and images associated with the project, even stopped containers.
+
+2. Docker Compose
+-----------------
+
+Docker Compose provides an easy way to run the Solar Controller in a container, including access to host devices like /dev/ttyUSB0 for serial communication.
+
+### Usage
+```bash
+# Build and start the container
+docker-compose up --build
+
+# Stop the container
+docker-compose down
+```
+
+### Example docker-compose.yaml settings
+```yaml
+version: "3.9"
+
+services:
+  solar_controller:
+    build: .
+    container_name: solar_controller
+    image: solaredgecontroller-solar-controller:latest
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    environment:
+      - PYTHONUNBUFFERED=1
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"  # Map USB device
+    privileged: true                 # Needed for serial access
+    volumes:
+      - ./src:/app/src               # Map source code for development
+      - ./run.sh:/app/run.sh         # Optional run script
+```
+
+### Notes
+
+- The devices: mapping allows the container to communicate with hardware connected to the host, such as energy meters or inverters via USB.
+- privileged: true ensures full device access.
+- Volumes allow live edits to the code while the container is running.
+- For production, you can remove volumes and set restart: always.
+
+3. Cleaning Docker
+------------------
+
+To remove all project-related images and containers:
+```bash
+make docker-clean
+```
+
+This will:  
+    1. Stop and remove all containers using the project image.  
+    2. Remove all tags of the project image, including latest and version-specific tags.
+
+4. Development Tips
+-------------------
+
+- Activate the virtual environment before running Makefile commands that use Python:
+```bash
+source .venv/bin/activate
+```
+
+- The Makefile ensures the correct PYTHONPATH for the src layout.
+- Ruff is used for linting and formatting. Use make lint to check and make lint-fix to auto-correct.
+- All version numbers are defined in pyproject.toml to keep consistency between Python package, Docker tags, and documentation.

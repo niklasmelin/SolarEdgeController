@@ -32,6 +32,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
+    "confuse>=2.1.0",
+    "uv",
     "pyserial>=3.5",
     "pytest-asyncio>=0.21",
     "pytest>=7.0",

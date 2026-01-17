@@ -20,8 +20,8 @@ async def main():
     config = load_config()
 
     # Create instances using factories
-    reader = create_sensor(config)
-    inverter = create_inverter(config)
+    reader = create_sensor(config.esp_sensor)
+    inverter = create_inverter(config.inverter)
     regulator = SolarRegulator()
 
     try:

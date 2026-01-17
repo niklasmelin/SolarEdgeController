@@ -129,7 +129,8 @@ class ESPHomeReader:
                 )
             except APIConnectionError:
                 self._connected = False
-                self.logger.exception("ESPHome connection failed")
+                #self.logger.exception("ESPHome connection failed")
+                self.logger.error("ESPHome connection failed")
                 raise
 
     async def disconnect(self):
