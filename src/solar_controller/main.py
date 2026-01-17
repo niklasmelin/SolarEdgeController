@@ -1,23 +1,30 @@
 import asyncio
 import logging
+import signal
 import sys
 
-from solar_controller.logger import setup_logger
 from solar_controller.config import load_config
-from solar_controller.server import start_server, STATUS, HISTORY
+from solar_controller.server import start_server, STATUS, HISTORY, CONTROL
 from solar_controller.factories.sensor_factory import create_sensor
 from solar_controller.factories.inverter_factory import create_inverter
 from solar_controller.controller.solar_regulator import SolarRegulator
 
 
-async def main():
+async def main(stop_event: asyncio.Event | None = None):
     """
-    Main function to demonstrate the usage of EspReader.
+    Main async loop for Solar Controller.
+    Gracefully handles signals to allow clean shutdown.
     """
-    # Set up logging (moved to logging.py)
-    setup_logger()
+    # Use provided stop_event or create a new one
+    stop_event = stop_event or asyncio.Event()
 
-    # Load all config values from config module
+    # Only register OS signals if no stop_event was provided (i.e., production)
+    if stop_event.is_set() is False:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop_event.set)
+
+    # Load config (logger configured automatically)
     config = load_config()
 
     # Create instances using factories
@@ -26,98 +33,85 @@ async def main():
     regulator = SolarRegulator()
 
     # Start HTTP heartbeat server
-    asyncio.create_task(start_server())
+    asyncio.create_task(start_server(config))
 
+    # Connect to devices
+    await reader.ensure_connected()
+    if not reader._connected:
+        logging.error("Failed to connect to ESPHome reader.")
+        sys.exit(1)
+
+    if not await inverter.check_connection():
+        logging.error("Failed to connect to SolarEdge inverter.")
+        sys.exit(1)
+
+    # Initial CONTROL values
+    new_current_price = 0.0
+    new_negative_price = False
+
+    i = 0
     try:
-        # Connect to the ESPHome device
-        await reader.ensure_connected()
-        if not reader._connected:
-            logging.error("Failed to connect to ESPHome reader.")
-            sys.exit(1)
-
-        # Check inverter connection
-        if not await inverter.check_connection():
-            logging.error("Failed to connect to SolarEdge inverter.")
-            sys.exit(1)
-
-        for i in range(10):
-            # Read data from inverter
+        while not stop_event.is_set():
+            # --- Inverter ---
             await inverter.read_all_registers()
             inverter_data = inverter.get_registers_as_json()
             solar_production = inverter_data["power_ac"]
             logging.debug(f"Current solar production: {solar_production} W")
 
-            # Read data from ESPHome device
+            # --- ESPHome sensor ---
             sensor_esp = reader.get_control_data()
-            current_export, current_export_time = sensor_esp["grid_import_power"]
-            current_import, current_export_time = sensor_esp["grid_export_power"]
+            current_export, _ = sensor_esp["grid_import_power"]
+            current_import, _ = sensor_esp["grid_export_power"]
 
-            logging.debug(
-                f"Current export: {current_export} W, Current import: {current_import} W"
-            )
-            # Compute current active power consumption
+            logging.debug(f"Current export: {current_export} W, Current import: {current_import} W")
+
+            # --- Compute consumption ---
             grid_consumption = current_export - current_import
-            logging.debug(f"Current grid consumption: {grid_consumption} W")
-
-            # Compute current home consumption
             home_consumption = abs(solar_production - grid_consumption)
-            logging.debug(f"Current home consumption: {home_consumption} W")
+            logging.debug(f"Grid consumption: {grid_consumption} W, Home consumption: {home_consumption} W")
 
-            # Compute new scale factor
+            # --- Compute new scale factor ---
             scale_factor = regulator.new_scale_factor(
                 current_grid_consumption=grid_consumption,
-                current_solar_production=inverter_data["power_ac"],
+                current_solar_production=solar_production,
+                updated_current_price=new_current_price,
+                updated_negative_price=new_negative_price
             )
             logging.debug(f"Computed scale factor: {scale_factor} %")
 
-            # Apply new scale factor to inverter
-            # await inverter.set_max_power_scale_factor(scale_factor)
-
             logging.info(
-                f"Cycle {i+1}: Grid consumption = {grid_consumption} W, "
-                f"Home Consumption = {home_consumption} W, "
-                f"Solar Production = {solar_production} W, "
-                f"New Scale Factor = {scale_factor} %"
+                f"Cycle {i+1}: Grid={grid_consumption} W, Home={home_consumption} W, "
+                f"Solar={solar_production} W, Scale Factor={scale_factor} %"
             )
-            
-            # Update shared STATUS dictionary for the server
+
+            # --- Update STATUS, HISTORY, CONTROL ---
             STATUS.update({
                 "grid_consumption": grid_consumption,
                 "home_consumption": home_consumption,
                 "solar_production": solar_production,
                 "new_scale_factor": scale_factor,
             })
-            # Update HISTORY for plotting
             for key in HISTORY:
                 HISTORY[key].append(STATUS[key])
 
-            # allow time for the device to push current states
-            await asyncio.sleep(1)
+            new_current_price = CONTROL.get("current_price")
+            new_negative_price = CONTROL.get("negative_price")
 
-        # Get ESPHome device
-        grid_sensors = reader.get_sensor_data_as_json()
-        print("\nGrid sensors:")
-        for info in grid_sensors.values():
-            print(
-                f"\t{info['object_id']:<36} "
-                f"{info['name']:<36} "
-                f"{str(info['value']):>8} "
-                f"{info['unit']}"
-            )
-        # Get SolarEdge inverter data
-        solaredge_sensors = inverter.get_registers_as_json()
-        print("\n SolarEdge sensors:")
-        for key, value in solaredge_sensors.items():
-            val_display = "<no value>" if value is None else value
-            print(f"\t{key:<36} {val_display:>12}")
+            i += 1
+            await asyncio.sleep(1)  # loop interval
+
+    except Exception as e:
+        logging.exception("Exception in main loop: %s", e)
 
     finally:
+        logging.info("Shutting down, disconnecting devices...")
         await reader.disconnect()
         # await inverter.disconnect()
+        logging.info("Shutdown complete.")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nExport limiter stopped by user.")
+        print("\nSolar controller stopped by user.")

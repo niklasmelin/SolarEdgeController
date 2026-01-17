@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 
@@ -37,6 +38,8 @@ class SolarRegulator:
 
         # Internal state
         self.last_limited_power: Optional[float] = None
+        self.current_price: float = 0.0
+        self.negative_price: bool = False
 
         # Precomputed maximum power change per control cycle [W]
         self.max_step_watt: float = (
@@ -45,7 +48,7 @@ class SolarRegulator:
             * (self.DT / 15.0)
         )
 
-    def new_scale_factor(self, current_grid_consumption: float, current_solar_production: float) -> int:
+    def new_scale_factor(self, current_grid_consumption: float, current_solar_production: float, updated_current_price: float = 0, updated_negative_price: bool = False) -> int:
         """
         Compute the next inverter scale factor.
 
@@ -62,6 +65,12 @@ class SolarRegulator:
         current_solar_production : float
             Current inverter output power before limiting (watts).
 
+        updated_current_price : float
+            Current electricity price in c/kWh.
+            
+        updated_negative_price : bool
+            Whether the current price is negative.
+
         Returns
         -------
         int
@@ -71,6 +80,13 @@ class SolarRegulator:
         # Sanitize inputs
         home: float = max(0.0, float(current_grid_consumption))
         solar: float = max(0.0, float(current_solar_production))
+        new_price: float = float(updated_current_price)
+        new_negative_price: bool = bool(updated_negative_price)
+        
+        if new_price != self.current_price or new_negative_price != self.negative_price:
+            self.current_price = new_price
+            self.negative_price = new_negative_price
+            logging.info(f"Updated price info: current_price={self.current_price}, negative_price={self.negative_price}")
 
         # Initialize internal state on first call
         if self.last_limited_power is None:
@@ -106,5 +122,12 @@ class SolarRegulator:
         # Convert to integer scale factor
         scale_factor: int = int(round(100.0 * limited_power / solar))
         scale_factor = max(0, min(100, scale_factor))
+
+        # Check if price is negative - if so, set scale factor to 100%
+        if self.negative_price:
+            scale_factor = 100
+            logging.debug("Negative price detected, setting scale factor to 100%")
+        else:
+            logging.debug(f"Computed scale factor: {scale_factor}% for limited power: {limited_power} W")        
 
         return scale_factor

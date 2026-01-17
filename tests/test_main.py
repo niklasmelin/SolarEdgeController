@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from solar_controller.main import main
@@ -42,23 +43,32 @@ def mock_reader():
 
 @pytest.mark.asyncio
 async def test_main_loop_runs(mock_inverter, mock_reader):
+    # Create a stop event to break the infinite loop
+    stop_event = asyncio.Event()
+
+    # Schedule the stop_event to be set almost immediately
+    asyncio.get_running_loop().call_later(0.01, stop_event.set)
+
     # Patch the factory functions where they are looked up in main.py
     with patch("solar_controller.main.create_inverter", return_value=mock_inverter), \
          patch("solar_controller.main.create_sensor", return_value=mock_reader), \
-         patch("solar_controller.logger.setup_logger"), \
-         patch("solar_controller.config.load_config", return_value={}):
+         patch("solar_controller.config.load_config", return_value=mock_inverter.config):  # adjust to your config mock
 
-        # Run the main function
-        await main()
+        # Run the main function with stop_event injected
+        await main(stop_event=stop_event)
 
         # Assert the ESPHome reader connection was checked
         mock_reader.ensure_connected.assert_awaited()
+
         # Assert the inverter connection was checked
         mock_inverter.check_connection.assert_awaited()
+
         # Assert inverter registers were read at least once
         mock_inverter.read_all_registers.assert_awaited()
+
         # Assert control data was retrieved
         mock_reader.get_control_data.assert_called()
+
         # Assert registers were retrieved as JSON
         mock_inverter.get_registers_as_json.assert_called()
 
@@ -73,7 +83,6 @@ async def test_main_loop_handles_low_pv(mock_inverter, mock_reader):
     # Patch factories
     with patch("solar_controller.main.create_inverter", return_value=mock_inverter), \
          patch("solar_controller.main.create_sensor", return_value=mock_reader), \
-         patch("solar_controller.logger.setup_logger"), \
          patch("solar_controller.config.load_config", return_value={}):
 
         regulator = SolarRegulator()
