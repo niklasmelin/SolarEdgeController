@@ -4,7 +4,7 @@ import sys
 
 from solar_controller.logger import setup_logger
 from solar_controller.config import load_config
-from solar_controller.server import start_server, STATUS
+from solar_controller.server import start_server, STATUS, HISTORY
 from solar_controller.factories.sensor_factory import create_sensor
 from solar_controller.factories.inverter_factory import create_inverter
 from solar_controller.controller.solar_regulator import SolarRegulator
@@ -87,6 +87,9 @@ async def main():
                 "solar_production": solar_production,
                 "new_scale_factor": scale_factor,
             })
+            # Update HISTORY for plotting
+            for key in HISTORY:
+                HISTORY[key].append(STATUS[key])
 
             # allow time for the device to push current states
             await asyncio.sleep(1)
