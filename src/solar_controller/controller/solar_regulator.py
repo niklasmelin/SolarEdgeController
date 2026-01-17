@@ -45,7 +45,7 @@ class SolarRegulator:
             * (self.DT / 15.0)
         )
 
-    def new_scale_factor(self, current_home_consumption: float, current_solar_production: float) -> int:
+    def new_scale_factor(self, current_grid_consumption: float, current_solar_production: float) -> int:
         """
         Compute the next inverter scale factor.
 
@@ -55,7 +55,7 @@ class SolarRegulator:
 
         Parameters
         ----------
-        current_home_consumption : float
+        current_grid_consumption : float
             Current household power consumption in watts.
             Negative values are treated as zero.
 
@@ -69,7 +69,7 @@ class SolarRegulator:
         """
 
         # Sanitize inputs
-        home: float = max(0.0, float(current_home_consumption))
+        home: float = max(0.0, float(current_grid_consumption))
         solar: float = max(0.0, float(current_solar_production))
 
         # Initialize internal state on first call

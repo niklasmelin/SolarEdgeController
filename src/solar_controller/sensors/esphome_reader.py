@@ -361,6 +361,52 @@ class ESPHomeReader:
 
         return simplified
 
+    def get_control_data(self) -> dict[str, list[int | str | None]]:
+        """
+        Return a simplified, standardized mapping of sensor readings for the control loop.
+
+        Output format:
+        {
+            "grid_import_power": [value, last_updated],
+            "grid_export_power": [value, last_updated]
+        }
+
+        Notes
+        -----
+        - Values are floats, "<no value>" if never reported.
+        - last_updated is a float timestamp or None if never reported.
+        - No I/O is performed; values are taken from cached state.
+        """
+        if not self._connected:
+            raise RuntimeError(
+                "ESPHome device not connected. Call ensure_connected() first."
+            )
+
+        # Map ESPHome object IDs → standardized control keys
+        CONTROL_KEY_MAPPING = {
+            "momentary_active_import": "grid_import_power",
+            "momentary_active_export": "grid_export_power",
+        }
+
+        standardized: dict[str, list[int | str | None]] = {}
+
+        for esphome_key, std_key in CONTROL_KEY_MAPPING.items():
+            # Find the actual key in meta
+            key = next((k for k, v in self.meta.items() if v[0] == esphome_key), None)
+            if key is None:
+                standardized[std_key] = ["<no value>", None]
+                continue
+
+            state = self.states.get(key)
+            if state is None:
+                standardized[std_key] = ["<no value>", None]
+            else:
+                val = int(state["value"] * 1000)  # kW to W
+                ts = state["last_updated"]
+                standardized[std_key] = [val, ts]
+
+        return standardized
+
 
 # ------------------- EXAMPLE USAGE -------------------
 async def main():

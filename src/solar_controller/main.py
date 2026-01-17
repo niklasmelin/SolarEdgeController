@@ -44,26 +44,24 @@ async def main():
             logging.debug(f"Current solar production: {solar_production} W")
 
             # Read data from ESPHome device
-            sensor_esp = reader.get_data_as_json()
-            current_export, current_export_time = sensor_esp[
-                "momentary_active_import"
-            ]
-            current_import, current_export_time = sensor_esp[
-                "momentary_active_export"
-            ]
-            # Apply scaling from kW to W
-            current_export *= 1000
-            current_import *= 1000
+            sensor_esp = reader.get_control_data()
+            current_export, current_export_time = sensor_esp["grid_import_power"]
+            current_import, current_export_time = sensor_esp["grid_export_power"]
+
             logging.debug(
                 f"Current export: {current_export} W, Current import: {current_import} W"
             )
             # Compute current active power consumption
-            home_consumption = current_export - current_import
+            grid_consumption = current_export - current_import
+            logging.debug(f"Current grid consumption: {grid_consumption} W")
+
+            # Compute current home consumption
+            home_consumption = solar_production - grid_consumption
             logging.debug(f"Current home consumption: {home_consumption} W")
 
             # Compute new scale factor
             scale_factor = regulator.new_scale_factor(
-                current_home_consumption=home_consumption,
+                current_grid_consumption=grid_consumption,
                 current_solar_production=inverter_data["power_ac"],
             )
             logging.debug(f"Computed scale factor: {scale_factor} %")
@@ -72,7 +70,8 @@ async def main():
             # await inverter.set_max_power_scale_factor(scale_factor)
 
             logging.info(
-                f"Cycle {i+1}: Home Consumption = {home_consumption} W, "
+                f"Cycle {i+1}: Grid consumption = {grid_consumption} W, "
+                f"Home Consumption = {home_consumption} W, "
                 f"Solar Production = {solar_production} W, "
                 f"New Scale Factor = {scale_factor} %"
             )
