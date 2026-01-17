@@ -4,5 +4,7 @@ pyserial
 pyserial-asyncio
 aioesphomeapi
 coverage
-flake8
-black
+pytest
+pytest-asyncio
+pytest-cov
+ruff

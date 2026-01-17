@@ -36,7 +36,7 @@ async def main():
             logging.error("Failed to connect to SolarEdge inverter.")
             sys.exit(1)
 
-        for i in range(3):
+        for i in range(1):
             # Read data from inverter
             await inverter.read_all_registers()
             inverter_data = inverter.get_registers_as_json()
