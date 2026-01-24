@@ -33,7 +33,7 @@ async def main(stop_event: asyncio.Event | None = None):
     regulator = SolarRegulator()
 
     # Start HTTP heartbeat server
-    asyncio.create_task(start_server(config))
+    asyncio.create_task(start_server(config, inverter=inverter))
 
     # Connect to devices
     await reader.ensure_connected()
@@ -98,7 +98,7 @@ async def main(stop_event: asyncio.Event | None = None):
             new_negative_price = CONTROL.get("negative_price")
 
             i += 1
-            await asyncio.sleep(1)  # loop interval
+            await asyncio.sleep(10)  # loop interval
 
     except Exception as e:
         logging.exception("Exception in main loop: %s", e)

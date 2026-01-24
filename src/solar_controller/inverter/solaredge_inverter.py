@@ -161,17 +161,10 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
             if name.endswith("_scale"):
                 continue
 
-            # Get raw value and apply scaling if relevant
+            # self.logger.DEBUG(f"Processing register for HA sensor: {name}, reg: {reg}, value: {getattr(self, name, None)}")
+
+            # Get scaled values
             value = getattr(self, name, None)
-            if value is not None and reg.scale:
-                scale_value = getattr(self, reg.scale, None)
-                if scale_value is not None:
-                    try:
-                        value = float(value) * (10 ** int(scale_value))
-                    except Exception:
-                        self.logger.warning(
-                            "Failed to apply scale %s to %s", reg.scale, name
-                        )
 
             # Build HA sensor dictionary
             sensors[name] = {

@@ -124,16 +124,40 @@ async def handle_control(request):
         return web.json_response({"error": str(e)}, status=400)
 
 # --------------------------------------------------------------------
+# HA Sensors endpoint
+# --------------------------------------------------------------------
+async def handle_sensors(request):
+    """
+    Expose inverter sensors for Home Assistant.
+    Calls inverter.get_ha_sensors() and returns a JSON array.
+    """
+    inverter = request.app.get("inverter")
+    if inverter is None:
+        return web.json_response({"error": "Inverter not available"}, status=500)
+    
+    try:
+        sensors = inverter.get_ha_sensors()
+        return web.json_response(sensors)
+    except Exception as e:
+        log.exception("Failed to get HA sensors: %s", e)
+
+# --------------------------------------------------------------------
 # Start server
 # --------------------------------------------------------------------
-async def start_server(config: AppConfig):
-    """Start aiohttp server with /health, /status, /status/json, /control endpoints"""
+async def start_server(config: AppConfig, inverter=None):
+    """Start aiohttp server with /health, /status, /status/json, /control and /sensors endpoints"""
     app = web.Application()
     app["config"] = config
+    app["inverter"] = inverter  # Pass inverter instance for /sensors
+
+    # Existing routes
     app.router.add_get("/health", handle_heartbeat)
     app.router.add_get("/status", handle_status)
     app.router.add_get("/status/json", handle_status_json)
     app.router.add_post("/control", handle_control)
+
+    # New HA sensors route
+    app.router.add_get("/sensors", handle_sensors)
 
     runner = web.AppRunner(app)
     await runner.setup()

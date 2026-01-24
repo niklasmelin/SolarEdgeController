@@ -411,3 +411,121 @@ source .venv/bin/activate
 - The Makefile ensures the correct PYTHONPATH for the src layout.
 - Ruff is used for linting and formatting. Use make lint to check and make lint-fix to auto-correct.
 - All version numbers are defined in pyproject.toml to keep consistency between Python package, Docker tags, and documentation.
+
+## Server Module (`server.py`)
+
+The `server.py` module provides an HTTP interface for monitoring and controlling the Solar Controller system. It is built using `aiohttp` and exposes endpoints for **heartbeat**, **status display**, **historical data**, and **control commands**.
+
+### Shared State
+
+- `STATUS` — Current values of key metrics:
+  - `grid_consumption` (W)
+  - `home_consumption` (W)
+  - `solar_production` (W)
+  - `new_scale_factor` (%)
+- `HISTORY` — Last 50 values for each metric (for plotting).
+- `CONTROL` — Values updated via API:
+  - `current_price` (float)
+  - `negative_price` (boolean)
+
+### Endpoints
+
+1. **Health / Heartbeat**
+
+   ```
+   GET /health
+   ```
+
+   Returns a simple JSON response to confirm the container is alive:
+
+   ```json
+   {
+       "status": "ok",
+       "message": "Container is alive"
+   }
+   ```
+
+2. **Status Page (HTML)**
+
+   ```
+   GET /status
+   ```
+
+   Serves an HTML page showing:
+
+   - Current values from `STATUS` table.
+   - Interactive chart of the last 50 cycles using `Chart.js`.
+
+   The chart automatically fetches `/status/json` every 5 seconds.
+
+3. **Status JSON**
+
+   ```
+   GET /status/json
+   ```
+
+   Returns JSON representation of historical data:
+
+   ```json
+   {
+       "grid_consumption": [...],
+       "home_consumption": [...],
+       "solar_production": [...],
+       "new_scale_factor": [...]
+   }
+   ```
+
+4. **Control Endpoint**
+
+   ```
+   POST /control
+   ```
+
+   Accepts JSON payload to update the `CONTROL` dictionary. Example:
+
+   ```json
+   {
+       "current_price": 0.12,
+       "negative_price": true
+   }
+   ```
+
+   Returns the updated control state:
+
+   ```json
+   {
+       "status": "ok",
+       "updated": {
+           "current_price": 0.12,
+           "negative_price": true
+       }
+   }
+   ```
+
+   > **Note:** Token-based authorization is implemented but can be disabled for development by commenting out the relevant lines.
+
+### Server Startup
+
+The server is started via the `start_server(config: AppConfig)` coroutine. It:
+
+- Creates an `aiohttp` application.
+- Registers routes for `/health`, `/status`, `/status/json`, and `/control`.
+- Starts listening on `0.0.0.0:8080`.
+
+```python
+import asyncio
+from solar_controller.server import start_server
+from solar_controller.config import load_config
+
+config = load_config()
+asyncio.run(start_server(config))
+```
+
+---
+
+### Notes
+
+- The server runs asynchronously and does not block the main control loop.
+- `HISTORY` maintains a rolling window of the last 50 cycles for plotting.
+- `/control` endpoint can later be secured with a token (configured in `config.yaml`).
+- The status page provides a live visualization using Chart.js.
