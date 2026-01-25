@@ -23,10 +23,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "solar_controller"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python package for controlling and monitoring SolarEdge inverters"
 authors = [
-    { name = "Niklas", email = "niklas@example.com" }
+    { name = "Niklas Melin", email = "niklasme@pm.me" }
 ]
 readme = "README.md"
 requires-python = ">=3.11"

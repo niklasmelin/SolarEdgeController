@@ -16,8 +16,10 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY src/ ./src
 COPY run.sh ./
+COPY healthcheck.py /app/healthcheck.py
+RUN chmod +x /app/healthcheck.py
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV DOCKER=True
 CMD ["python", "-m", "solar_controller.main"]
 
-HEALTHCHECK --interval=10s --timeout=3s CMD curl -f http://localhost:8080/health || exit 1
+HEALTHCHECK --interval=10s --timeout=3s CMD python /app/healthcheck.py

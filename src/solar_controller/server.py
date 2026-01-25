@@ -7,21 +7,21 @@ log = logging.getLogger(__name__)
 HEARTBEAT_PORT = 8080
 
 # Shared state
-STATUS = {
-    "grid_consumption": 0,
-    "home_consumption": 0,
-    "solar_production": 0,
-    "new_scale_factor": 0,
+STATUS: dict[str, float] = {
+    "grid_consumption": 0.0,
+    "home_consumption": 0.0,
+    "solar_production": 0.0,
+    "new_scale_factor": 0.0,
 }
 
-HISTORY = {
+HISTORY: dict[str, deque] = {
     "grid_consumption": deque(maxlen=50),
     "home_consumption": deque(maxlen=50),
     "solar_production": deque(maxlen=50),
     "new_scale_factor": deque(maxlen=50),
 }
 
-CONTROL = {
+CONTROL: dict[str, float | bool] = {
     "current_price": 0.0,
     "negative_price": False,
 }

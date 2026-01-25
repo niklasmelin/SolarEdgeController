@@ -1,5 +1,6 @@
 services:
   solar-controller:
+    restart: unless-stopped  
     build:
       context: .
       dockerfile: Dockerfile
@@ -14,7 +15,13 @@ services:
       - ./run.sh:/app/run.sh
       - ./config.yaml:/app/config.yaml
     devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0"  # map host USB to container
+      - "/dev/ttyUSB0:/dev/ttyUSB0"  # map host USB modbus device to container
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
     tty: true
     stdin_open: true
     command: python -m solar_controller.main

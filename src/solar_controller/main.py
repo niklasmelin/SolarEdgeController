@@ -60,17 +60,26 @@ async def main(stop_event: asyncio.Event | None = None):
 
             # --- ESPHome sensor ---
             sensor_esp = reader.get_control_data()
-            current_export, _ = sensor_esp["grid_import_power"]
-            current_import, _ = sensor_esp["grid_export_power"]
+            current_export, _ = sensor_esp["grid_export_power"]
+            current_import, _ = sensor_esp["grid_import_power"]
 
             logging.debug(f"Current export: {current_export} W, Current import: {current_import} W")
 
             # --- Compute consumption ---
-            grid_consumption = current_export - current_import
+            if not isinstance(current_import, int) or not isinstance(current_export, int):
+                logging.warning(f"Invalid sensor readings: Import {current_import} W, Export {current_export} W, skipping this cycle.")
+                await asyncio.sleep(10)
+                continue
+            grid_consumption = current_import - current_export
             home_consumption = abs(solar_production - grid_consumption)
             logging.debug(f"Grid consumption: {grid_consumption} W, Home consumption: {home_consumption} W")
 
             # --- Compute new scale factor ---
+            if not isinstance(new_current_price, float) or not isinstance(new_negative_price, bool):
+                logging.warning("Invalid price reading or negative_price, skipping this cycle.")
+                await asyncio.sleep(10)
+                continue
+            
             scale_factor = regulator.new_scale_factor(
                 current_grid_consumption=grid_consumption,
                 current_solar_production=solar_production,
@@ -82,6 +91,7 @@ async def main(stop_event: asyncio.Event | None = None):
             logging.info(
                 f"Cycle {i+1}: Grid={grid_consumption} W, Home={home_consumption} W, "
                 f"Solar={solar_production} W, Scale Factor={scale_factor} %"
+                f", Price={new_current_price} kr/kWh, Negative Price={new_negative_price}"
             )
 
             # --- Update STATUS, HISTORY, CONTROL ---

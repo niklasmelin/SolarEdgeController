@@ -20,12 +20,46 @@ class ESPHomeReader:
         port: int,
         encryption_key: str,
         reconnect_delay: float = 5.0,
-        stale_timeout: float = 30.0,  # NEW: seconds without any updates => reconnect
+        stale_timeout: float = 30.0,
     ):
         """
         Initialize an ESPHome reader instance.
 
-        NEW: A watchdog will force reconnect if no state updates are received for
+        This class maintains a persistent, asynchronous connection to an ESPHome
+        device, discovers all available entities, subscribes to state updates,
+        and provides instant access to the latest sensor values along with
+        per-sensor update timestamps.
+
+        The connection is established lazily via `ensure_connected()` and is
+        designed for long-running applications that repeatedly query sensor data.
+
+        Parameters
+        ----------
+        host : str
+            IP address or hostname of the ESPHome device.
+
+        port : int
+            TCP port of the ESPHome API (typically 6053).
+
+        encryption_key : str
+            ESPHome Noise protocol encryption key used to authenticate
+            and encrypt the API connection.
+
+        reconnect_delay : float, optional
+            Number of seconds to wait before retrying a failed connection attempt.
+            Defaults to 5.0 seconds.
+        
+        stale_timeout : float, optional
+            Number of seconds without receiving any state updates before
+            considering the connection stale and attempting to reconnect.
+
+        Notes
+        -----
+        - Calling `get_data_as_json()` before `ensure_connected()` will raise
+        a RuntimeError.
+        - All discovered entities are waited for on initial connection, up to
+        a timeout, before data access is allowed.
+        - Sensor values are updated asynchronously via ESPHome state callbacks.
         `stale_timeout` seconds after connection.
         """
         self.host = host
