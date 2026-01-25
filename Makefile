@@ -110,18 +110,30 @@ docker-build:
 	@echo "Building Docker image $(IMAGE_NAME) with tags: latest and $(VERSION)..."
 	docker build -t $(IMAGE_NAME):latest -t $(IMAGE_NAME):$(VERSION) .
 
-IMAGE_PATTERN := solaredgecontroller-solar-controller
+IMAGE := solar_controller
+INTERMEDIATE_IMAGE := solaredgecontroller-solar-controller
 
 .PHONY: docker-clean
 docker-clean:
-	@echo "Stopping and removing all containers for images matching $(IMAGE_PATTERN)..."
-	-docker ps -a --filter "ancestor=$(IMAGE_PATTERN)" -q | xargs -r docker rm -f
+	@echo "Stopping all containers using $(IMAGE) or $(INTERMEDIATE_IMAGE) images..."
+	-docker ps -a --filter "ancestor=$(IMAGE)" -q | xargs -r docker rm -f
+	-docker ps -a --filter "ancestor=$(INTERMEDIATE_IMAGE)" -q | xargs -r docker rm -f
 
-	@echo "Removing all images matching $(IMAGE_PATTERN)..."
-	-docker images --format "{{.Repository}}:{{.Tag}}" | grep "$(IMAGE_PATTERN)" | xargs -r docker rmi -f
+	@echo "Removing all old $(IMAGE) images except 'latest' and version $(VERSION)..."
+	-docker images --format "{{.Repository}}:{{.Tag}}" | \
+		grep "^$(IMAGE):" | \
+		grep -vE ":(latest|$(VERSION))$$" | \
+		xargs -r docker rmi -f
+
+	@echo "Removing all intermediate build images: $(INTERMEDIATE_IMAGE)..."
+	-docker images --format "{{.Repository}}:{{.Tag}}" | \
+		grep "^$(INTERMEDIATE_IMAGE):" | \
+		xargs -r docker rmi -f
+
+	@echo "Pruning dangling layers..."
+	docker image prune -f
 
 	@echo "Docker cleanup complete."
-
 
 # --------------------------------------------------------------------
 # Help
