@@ -2,6 +2,7 @@ import asyncio
 import logging
 import signal
 import sys
+import time
 
 from solar_controller.config import load_config
 from solar_controller.server import start_server, STATUS, HISTORY, CONTROL
@@ -100,6 +101,7 @@ async def main(stop_event: asyncio.Event | None = None):
                 "home_consumption": home_consumption,
                 "solar_production": solar_production,
                 "new_scale_factor": scale_factor,
+                "last_update": time.time()
             })
             for key in HISTORY:
                 HISTORY[key].append(STATUS[key])
