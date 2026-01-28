@@ -8,14 +8,15 @@ services:
     environment:
       - PYTHONPATH=/app/src
     ports:
-      - "8080:8080"
+      - "8080:8080" # API server port. If TLS is enabled map 8443 externally i.e. "8443:8080"
     volumes:
-      - ./src:/app/src
-      - ./tests:/app/tests
-      - ./run.sh:/app/run.sh
-      - ./config.yaml:/app/config.yaml
+      #- ./src:/app/src
+      #- ./tests:/app/tests
+      #- ./run.sh:/app/run.sh
+      - ./config.yaml:/app/config.yaml  # mount config file is required for persistence
+      - ./certs:/app/certs              # mount certs directory for TLS for persistence
     devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0"  # map host USB modbus device to container
+      - "/dev/ttyUSB0:/dev/ttyUSB0"  # map host USB modbus device to container for serial communication
     healthcheck:
       test: ["CMD", "python", "/app/healthcheck.py"]
       interval: 10s

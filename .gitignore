@@ -113,3 +113,6 @@ tests/__pycache__/
 # Misc
 *.swp
 *~
+
+# SSL certificates
+certs/
