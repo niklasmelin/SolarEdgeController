@@ -1,37 +1,28 @@
 import asyncio
 import logging
+import re
 import time
 from typing import Optional, Dict, Any
 
 import solaredge_modbus
+
 from .solaredge_inverter_registers import REGISTERS, PollGroup
 
 
 class SolarEdgeInverter(solaredge_modbus.Inverter):
     """
     SolarEdge Inverter interface with dynamic register handling.
-    Blocks on Modbus I/O in a thread executor so async code can run without blocking the event loop.
 
-    Provides:
-    - Async connection check
-    - Async register reads (all / poll / control / status)
-    - Async writes for control registers
-    - Register scaling and caching
+    Important for Home Assistant unique_id stability:
+      Call `await inverter.update_identity_registers()` once during startup.
+      This "locks" the serial number the first time it is successfully read.
     """
 
-    def __init__(
-        self, device: str = "/dev/ttyUSB0", baud: int = 9600, timeout: int = 2
-    ) -> None:
-        """
-        Initialize the SolarEdgeInverter instance.
+    _SERIAL_RE = re.compile(r"^[A-Za-z0-9-]+$")
 
-        :param device: path to serial device or TCP endpoint
-        :param baud: serial baud rate
-        :param timeout: Modbus timeout (s)
-        """
+    def __init__(self, device: str = "/dev/ttyUSB0", baud: int = 9600, timeout: int = 2) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.info("Initializing SolarEdgeInverter...")
-
         super().__init__(device=device, baud=baud, timeout=timeout)
 
         # Initialize all register attributes to None
@@ -39,7 +30,10 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
             setattr(self, reg, None)
 
         # Last successful update timestamp
-        self.last_updated: float = 0
+        self.last_updated: float = 0.0
+
+        # Serial number is read once and then treated as read-only.
+        self._locked_serial: Optional[str] = None
 
     # -------------------------
     # Async Connection Helpers
@@ -72,6 +66,32 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         finally:
             self.disconnect()
 
+    async def update_identity_registers(self) -> None:
+        """
+        Read SunSpec identity registers once and lock serial number.
+
+        This prevents Home Assistant entity unique_ids from changing later
+        due to transient None/unknown serial values.
+        """
+        await self._async_update_group(PollGroup.IDENTITY)
+
+        serial_raw = getattr(self, "c_serialnumber", None)
+        serial = str(serial_raw).strip() if serial_raw is not None else ""
+
+        if not serial:
+            raise RuntimeError("Failed to read inverter serial number (c_serialnumber is empty/None).")
+
+        if not self._SERIAL_RE.fullmatch(serial):
+            raise RuntimeError(f"Inverter serial number has unexpected format: {serial!r}")
+
+        if self._locked_serial is None:
+            self._locked_serial = serial
+            self.logger.info("Locked inverter serial number: %s", serial)
+        elif serial != self._locked_serial:
+            raise RuntimeError(
+                f"Inverter serial number changed from {self._locked_serial!r} to {serial!r}; refusing."
+            )
+
     async def update_poll_registers(self) -> None:
         await self._async_update_group(PollGroup.POLL)
 
@@ -94,7 +114,6 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         try:
             if not self.connected():
                 raise ConnectionError("Failed to connect to inverter")
-
             for name, reg in REGISTERS.items():
                 if reg.group == group:
                     try:
@@ -116,7 +135,6 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
 
             value = raw_registers[key]
             scale_key = REGISTERS[key].scale
-
             if (
                 value is not None
                 and scale_key
@@ -133,6 +151,11 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
     # -------------------------
     # Output Helpers
     # -------------------------
+    @property
+    def serial_number(self) -> Optional[str]:
+        """Stable inverter serial number (only set after update_identity_registers)."""
+        return self._locked_serial
+
     def get_registers_as_json(self, group: Optional[PollGroup] = None) -> Dict[str, Any]:
         if group:
             return {r: getattr(self, r) for r, v in REGISTERS.items() if v.group == group}
@@ -141,32 +164,27 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
     def get_ha_sensors(self, group: Optional[PollGroup] = None) -> Dict[str, dict]:
         """
         Returns a dictionary of Home Assistant–ready sensor data with scaling applied.
-
         :param group: Optional PollGroup to filter (e.g., PollGroup.POLL)
         :return: dict keyed by register name containing HA sensor metadata and state
         """
-        sensors: Dict[str, dict] = {}
-        serial = getattr(self, "c_serialnumber", "unknown")
+        serial = self.serial_number
+        if not serial:
+            raise RuntimeError(
+                "Inverter identity not initialized (serial_number is missing). "
+                "Call update_identity_registers() once during startup."
+            )
 
+        sensors: Dict[str, dict] = {}
         for name, reg in REGISTERS.items():
-            # Filter by group if requested
             if group and reg.group != group:
                 continue
-
-            # Skip registers without HA metadata
             if not reg.ha:
                 continue
-
-            # Skip scale factor registers themselves
             if name.endswith("_scale"):
                 continue
 
-            # self.logger.DEBUG(f"Processing register for HA sensor: {name}, reg: {reg}, value: {getattr(self, name, None)}")
-
-            # Get scaled values
             value = getattr(self, name, None)
 
-            # Build HA sensor dictionary
             sensors[name] = {
                 "state": value,
                 "unit": reg.ha.unit,
@@ -183,25 +201,12 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
         return sensors
 
     def get_control_data(self) -> Dict[str, Any]:
-        """
-        Get the current poll data from the inverter required for control, decoupled from register names.
-
-        Returns:
-            dict: Dictionary with current solar production, current power limit of the inverter, 
-                and the time when the data was last updated.
-        """
         control_data: Dict[str, Any] = {}
-
-        # Filter POLL group registers
         current_data = {r: getattr(self, r) for r, v in REGISTERS.items() if v.group == PollGroup.POLL}
-
-        # Map to control loop keys
-        control_data["solar_production"] = current_data.get("power_ac")  # assuming power_ac represents solar production
+        control_data["solar_production"] = current_data.get("power_ac")
         control_data["power_limit"] = getattr(self, "active_power_limit", None)
         control_data["last_updated"] = getattr(self, "last_updated", None)
-
         return control_data
-
 
     def print_registers(self, group: Optional[PollGroup] = None) -> None:
         data = self.get_registers_as_json(group)
@@ -217,7 +222,6 @@ class SolarEdgeInverter(solaredge_modbus.Inverter):
     async def set_production_limit(self, limit: int) -> None:
         if not (0 <= limit <= 100):
             raise ValueError("Limit must be between 0 and 100.")
-
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self._sync_set_production_limit, limit)
 

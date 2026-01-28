@@ -12,4 +12,22 @@ INVERTER:
   SOLAR_EDGE_INVERTER_TIMEOUT: 2
 
 API:
+  HOST: "0.0.0.0"
+  PORT: 8080
+
+  # Bearer token required for /sensors, /control, /status/json when set (recommended)
   TOKEN: "YourSecretTokenHere"
+
+  # Enable HTTPS/TLS
+  TLS_ENABLED: true
+
+  # If these files exist, they will be used.
+  # If they don't exist AND TLS_AUTO_GENERATE is true, a self-signed cert will be generated on startup.
+  TLS_CERTFILE: "certs/solaredgecontroller.crt"
+  TLS_KEYFILE: "certs/solaredgecontroller.key"
+  TLS_AUTO_GENERATE: true
+
+  # Used for self-signed cert CN/SAN; set these to match how Home Assistant reaches the host.
+  TLS_HOSTNAME: "solaredgepi"     # e.g. DNS name in your LAN
+  TLS_IP: "192.168.30.42"         # optional; include IP in SAN (helps if HA connects via IP)
+  TLS_DAYS: 3650
