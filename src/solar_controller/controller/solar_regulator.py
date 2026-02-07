@@ -37,9 +37,11 @@ class SolarRegulator:
         # ------------------------------------------------
 
         # Internal state
-        self.last_limited_power: Optional[float] = None
-        self.current_price: float = 0.0
-        self.negative_price: bool = False
+        self.last_limited_power: Optional[float] = None        
+        self.limit_export: bool = False
+        self.auto_mode: bool = False
+        self.auto_mode_threshold: float = 0.0
+        self.power_limit: float = 0.0
 
         # Precomputed maximum power change per control cycle [W]
         self.max_step_watt: float = (
@@ -48,10 +50,15 @@ class SolarRegulator:
             * (self.DT / 15.0)
         )
 
-    def new_scale_factor(self, current_grid_consumption: float, current_solar_production: float, updated_current_price: float = 0, updated_negative_price: bool = False) -> int:
+    def new_scale_factor(self,
+                         current_grid_consumption: float,
+                         current_solar_production: float,
+                         limit_export: bool = False,
+                         auto_mode: bool = False,
+                         auto_mode_threshold: float = 0.0,
+                         power_limit_W: float = 0.0) -> int:
         """
         Compute the next inverter scale factor.
-
         This method must be called once per control cycle.
         It updates internal state and returns a scale factor
         suitable for direct inverter control.
@@ -59,35 +66,37 @@ class SolarRegulator:
         Parameters
         ----------
         current_grid_consumption : float
-            Current household power consumption in watts.
-            Negative values are treated as zero.
+        Current household power consumption in watts.
+        Negative values are treated as zero.
 
-        current_solar_production : float
-            Current inverter output power before limiting (watts).
+        If limit_export is enablend the regulator will stear towards the following target:
+            If auto_mode is enabled:
+                Stear towards the power_limit value for export
+            If auto_mode is disabled:
+                Constant limited solar production according to the power_limit. I.e. the inverter will not produce more that this value.
+        If limit_export is disabled.
+            Inverter will produce as much as possible.
 
-        updated_current_price : float
-            Current electricity price in c/kWh.
-            
-        updated_negative_price : bool
-            Whether the current price is negative.
+        auto_mode : bool
+        Use automatic mode ( True ) or manual mode ( False )
+
+        auto_mode_threshold : float
+        Threshold value for auto mode
+
+        power_limit : float
+        Maximum power output of the solar panel
 
         Returns
         -------
         int
-            Integer inverter scale factor in the range 0–100 (%).
+        Integer inverter scale factor in the range 0–100 (%).
         """
+
 
         # Sanitize inputs
         home: float = max(0.0, float(current_grid_consumption))
         solar: float = max(0.0, float(current_solar_production))
-        new_price: float = float(updated_current_price)
-        new_negative_price: bool = bool(updated_negative_price)
         
-        if new_price != self.current_price or new_negative_price != self.negative_price:
-            self.current_price = new_price
-            self.negative_price = new_negative_price
-            logging.info(f"Updated price info: current_price={self.current_price}, negative_price={self.negative_price}")
-
         # Initialize internal state on first call
         if self.last_limited_power is None:
             self.last_limited_power = solar
@@ -95,10 +104,25 @@ class SolarRegulator:
         # Night or very low PV → no regulation
         if solar < self.LOW_PV_THRESHOLD:
             self.last_limited_power = solar
+            logging.debug(f"Solar production {solar} W is below low PV threshold {self.LOW_PV_THRESHOLD} W, setting scale factor to 100%")
             return 100
 
-        # Target inverter output to meet export constraint
-        desired_power: float = home + self.MAX_EXPORT_W
+        if not limit_export:
+            # No export limit, run at full production
+            logging.debug("Export limit disabled, setting scale factor to 100%")
+            return 100
+        
+        else:
+            # Export limit enabled, check auto mode
+            if auto_mode:
+                # Auto mode enabled, target inverter output to meet export constraint.
+                desired_power: float = home + self.MAX_EXPORT_W
+                
+                logging.debug(f"Auto mode enabled and home consumption {home} W is below threshold {auto_mode_threshold} W, setting power limit to 0 W")
+            else:
+                desired_power = power_limit_W
+                logging.debug(f"Auto mode disabled, using power limit {power_limit_W} W")
+
 
         # Control error (watts)
         error: float = desired_power - self.last_limited_power
@@ -122,12 +146,5 @@ class SolarRegulator:
         # Convert to integer scale factor
         scale_factor: int = int(round(100.0 * limited_power / solar))
         scale_factor = max(0, min(100, scale_factor))
-
-        # Check if price is negative - if so, set scale factor to 100%
-        if self.negative_price:
-            scale_factor = 100
-            logging.debug("Negative price detected, setting scale factor to 100%")
-        else:
-            logging.debug(f"Computed scale factor: {scale_factor}% for limited power: {limited_power} W")        
 
         return scale_factor

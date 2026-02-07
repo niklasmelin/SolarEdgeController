@@ -5,3 +5,4 @@ pyserial
 pyserial-asyncio
 aioesphomeapi
 confuse
+typing-extensions>=4.5

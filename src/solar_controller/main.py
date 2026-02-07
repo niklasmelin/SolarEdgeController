@@ -34,7 +34,7 @@ async def main(stop_event: asyncio.Event | None = None):
     regulator = SolarRegulator()
 
     # Start HTTP heartbeat server
-    asyncio.create_task(start_server(config, inverter=inverter))
+    asyncio.create_task(start_server(config, regulator, inverter=inverter))
 
     # Connect to devices
     await reader.ensure_connected()
@@ -53,6 +53,20 @@ async def main(stop_event: asyncio.Event | None = None):
     i = 0
     try:
         while not stop_event.is_set():
+            # --- Read CONTROL values ---
+            # {"limit_export": false, "auto_mode": true, "auto_mode_threshold": 0.0, "power_limit": 0.0}
+            try:
+                limit_export = bool(CONTROL.get("limit_export", False))
+                auto_mode = bool(CONTROL.get("auto_mode", True))
+                auto_mode_threshold = float(CONTROL.get("auto_mode_threshold", regulator.MAX_EXPORT_W))
+                power_limit_W = float(CONTROL.get("power_limit_W", regulator.PEAK_PRODUCTION_W))
+            except TypeError as e:
+                logging.warning(f"Invalid CONTROL values: {CONTROL}, error: {e}. Using defaults.")
+                limit_export = False
+                auto_mode = True
+                auto_mode_threshold = regulator.MAX_EXPORT_W
+                power_limit_W = regulator.PEAK_PRODUCTION_W
+            
             # --- Inverter ---
             await inverter.read_all_registers()
             inverter_data = inverter.get_registers_as_json()
@@ -76,16 +90,13 @@ async def main(stop_event: asyncio.Event | None = None):
             logging.debug(f"Grid consumption: {grid_consumption} W, Home consumption: {home_consumption} W")
 
             # --- Compute new scale factor ---
-            if not isinstance(new_current_price, float) or not isinstance(new_negative_price, bool):
-                logging.warning("Invalid price reading or negative_price, skipping this cycle.")
-                await asyncio.sleep(10)
-                continue
-            
             scale_factor = regulator.new_scale_factor(
                 current_grid_consumption=grid_consumption,
                 current_solar_production=solar_production,
-                updated_current_price=new_current_price,
-                updated_negative_price=new_negative_price
+                limit_export=limit_export,
+                auto_mode=auto_mode,
+                auto_mode_threshold=auto_mode_threshold,
+                power_limit_W=power_limit_W
             )
             logging.debug(f"Computed scale factor: {scale_factor} %")
 
@@ -101,13 +112,11 @@ async def main(stop_event: asyncio.Event | None = None):
                 "home_consumption": home_consumption,
                 "solar_production": solar_production,
                 "new_scale_factor": scale_factor,
-                "last_update": time.time()
+                "last_update": time.time(),
+                "power_limit_W": power_limit_W
             })
             for key in HISTORY:
                 HISTORY[key].append(STATUS[key])
-
-            new_current_price = CONTROL.get("current_price")
-            new_negative_price = CONTROL.get("negative_price")
 
             i += 1
             await asyncio.sleep(10)  # loop interval

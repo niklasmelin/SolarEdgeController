@@ -11,6 +11,7 @@ from typing import Deque, Dict, Optional
 from aiohttp import web
 
 from solar_controller.config import AppConfig
+from solar_controller.controller.solar_regulator import SolarRegulator
 
 log = logging.getLogger(__name__)
 
@@ -31,11 +32,14 @@ HISTORY: Dict[str, Deque[float]] = {
     "home_consumption": deque(maxlen=50),
     "solar_production": deque(maxlen=50),
     "new_scale_factor": deque(maxlen=50),
+    "power_limit_W": deque(maxlen=50),
 }
 
 CONTROL: Dict[str, float | bool] = {
-    "current_price": 0.0,
-    "negative_price": False,
+    "limit_export": False,
+    "auto_mode": True,
+    "auto_mode_threshold": 0.0,
+    "power_limit_W": 0.0
 }
 
 
@@ -175,7 +179,6 @@ async def handle_heartbeat(request: web.Request) -> web.Response:
 
 
 async def handle_status(request: web.Request) -> web.Response:
-    # Render a human-friendly last update in the initial HTML too
     last_update_formatted = _format_epoch(float(STATUS.get("last_update", 0.0) or 0.0))
 
     html = f"""
@@ -187,24 +190,34 @@ async def handle_status(request: web.Request) -> web.Response:
             h1 {{ color: #2b6cb0; }}
             table {{ border-collapse: collapse; width: 60%; margin-bottom: 2em; }}
             td, th {{ border: 1px solid #ccc; padding: 0.5em; text-align: left; }}
-            td.negative_price-true {{ color: red; font-weight: bold; }}
-            td.negative_price-false {{ color: green; font-weight: bold; }}
+            td.limit_export-true {{ color: red; font-weight: bold; }}
+            td.limit_export-false {{ color: green; font-weight: bold; }}
             canvas {{ max-width: 800px; max-height: 400px; }}
         </style>
     </head>
     <body>
         <h1>Solar Controller Status</h1>
+
         <table id="statusTable">
             <tr><th>Metric</th><th>Value</th></tr>
+
             <tr><td>Grid Consumption</td><td id="grid_consumption">{STATUS['grid_consumption']} W</td></tr>
             <tr><td>Home Consumption</td><td id="home_consumption">{STATUS['home_consumption']} W</td></tr>
             <tr><td>Solar Production</td><td id="solar_production">{STATUS['solar_production']} W</td></tr>
             <tr><td>New Scale Factor</td><td id="new_scale_factor">{STATUS['new_scale_factor']} %</td></tr>
-            <tr><td>Current Price</td><td id="current_price">{CONTROL['current_price']}</td></tr>
+
             <tr>
-              <td>Negative Price</td>
-              <td id="negative_price" class="negative_price-{str(CONTROL['negative_price']).lower()}">{CONTROL['negative_price']}</td>
+                <td>Limit Export</td>
+                <td id="limit_export"
+                    class="limit_export-{str(CONTROL['limit_export']).lower()}">
+                    {CONTROL['limit_export']}
+                </td>
             </tr>
+
+            <tr><td>Auto Mode</td><td id="auto_mode">{CONTROL['auto_mode']}</td></tr>
+            <tr><td>Auto Mode Threshold</td><td id="auto_mode_threshold">{CONTROL['auto_mode_threshold']}</td></tr>
+            <tr><td>Power Limit</td><td id="power_limit_W">{CONTROL['power_limit_W']} W</td></tr>
+
             <tr><td>Last Update</td><td id="last_update">{last_update_formatted}</td></tr>
         </table>
 
@@ -228,7 +241,7 @@ async def handle_status(request: web.Request) -> web.Response:
                 chart.data.datasets[0].data = h.grid_consumption || [];
                 chart.data.datasets[1].data = h.home_consumption || [];
                 chart.data.datasets[2].data = h.solar_production || [];
-                chart.data.datasets[3].data = h.new_scale_factor || [];
+                chart.data.datasets[3].data = h.power_limit_W  || [];
                 chart.update();
             }}
 
@@ -241,13 +254,15 @@ async def handle_status(request: web.Request) -> web.Response:
                 document.getElementById('home_consumption').innerText = s.home_consumption + ' W';
                 document.getElementById('solar_production').innerText = s.solar_production + ' W';
                 document.getElementById('new_scale_factor').innerText = s.new_scale_factor + ' %';
-                document.getElementById('current_price').innerText = c.current_price;
 
-                const negElem = document.getElementById('negative_price');
-                negElem.innerText = c.negative_price;
-                negElem.className = 'negative_price-' + c.negative_price.toString();
+                document.getElementById('auto_mode').innerText = c.auto_mode;
+                document.getElementById('auto_mode_threshold').innerText = c.auto_mode_threshold;
+                document.getElementById('power_limit_W').innerText = c.power_limit_W + ' W';
 
-                // Convert Unix epoch to human-readable yyyy-mm-dd HH:MM:SS
+                const limitElem = document.getElementById('limit_export');
+                limitElem.innerText = c.limit_export;
+                limitElem.className = 'limit_export-' + c.limit_export.toString();
+
                 if (s.last_update) {{
                     const date = new Date(s.last_update * 1000);
                     const yyyy = date.getFullYear();
@@ -256,8 +271,8 @@ async def handle_status(request: web.Request) -> web.Response:
                     const HH = String(date.getHours()).padStart(2, '0');
                     const MM = String(date.getMinutes()).padStart(2, '0');
                     const SS = String(date.getSeconds()).padStart(2, '0');
-                    const formatted = `${{yyyy}}-${{mm}}-${{dd}} ${{HH}}:${{MM}}:${{SS}}`;
-                    document.getElementById('last_update').innerText = formatted;
+                    document.getElementById('last_update').innerText =
+                        `${{yyyy}}-${{mm}}-${{dd}} ${{HH}}:${{MM}}:${{SS}}`;
                 }} else {{
                     document.getElementById('last_update').innerText = '';
                 }}
@@ -272,17 +287,19 @@ async def handle_status(request: web.Request) -> web.Response:
                         {{ label: 'Grid', data: [], borderColor: 'red', fill: false }},
                         {{ label: 'Home', data: [], borderColor: 'blue', fill: false }},
                         {{ label: 'Solar', data: [], borderColor: 'green', fill: false }},
-                        {{ label: 'Scale Factor', data: [], borderColor: 'orange', fill: false }},
+                        {{ label: 'Inverter Power Limit (W)', data: [], borderColor: 'orange', fill: false }},
                     ]
                 }},
-                options: {{ responsive: true, maintainAspectRatio: false, animation: false }}
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false
+                }}
             }});
 
-            // Initial load
             updateChart(historyChart);
             updateTable();
 
-            // Update every 5 seconds
             setInterval(() => {{
                 updateChart(historyChart);
                 updateTable();
@@ -292,6 +309,7 @@ async def handle_status(request: web.Request) -> web.Response:
     </html>
     """
     return web.Response(text=html, content_type="text/html")
+
 
 
 async def handle_status_json(request: web.Request) -> web.Response:
@@ -308,11 +326,11 @@ async def handle_status_json(request: web.Request) -> web.Response:
 async def handle_control(request: web.Request) -> web.Response:
     """
     Payload example:
-      {"current_price": 1.23, "negative_price": false}
+    {"limit_export": false, "auto_mode": true, "auto_mode_threshold": 0.0, "power_limit": 0.0}
     """
     try:
         data = await request.json()
-        for key in ("current_price", "negative_price"):
+        for key in CONTROL.keys():
             if key in data:
                 CONTROL[key] = data[key]
         return web.json_response({"status": "ok", "updated": CONTROL})
@@ -342,7 +360,7 @@ async def handle_sensors(request: web.Request) -> web.Response:
 # --------------------------------------------------------------------
 # Start server
 # --------------------------------------------------------------------
-async def start_server(config: AppConfig, inverter=None) -> None:
+async def start_server(config: AppConfig, regulator: SolarRegulator, inverter=None) -> None:
     # Best-effort: initialize inverter identity once before HA hits /sensors.
     if inverter is not None and hasattr(inverter, "update_identity_registers"):
         try:
@@ -350,10 +368,16 @@ async def start_server(config: AppConfig, inverter=None) -> None:
         except Exception as exc:
             log.error("Inverter identity not ready: %s", exc)
 
+
+    # Set default CONTROL values based on config
+    CONTROL["auto_mode_threshold"] = regulator.MAX_EXPORT_W
+    CONTROL["power_limit_W"] = regulator.PEAK_PRODUCTION_W
+
     app = web.Application(middlewares=[auth_middleware])
     app["config"] = config
     app["inverter"] = inverter
-
+    app["regulator"] = regulator
+    
     app.router.add_get("/health", handle_heartbeat)
     app.router.add_get("/status", handle_status)
     app.router.add_get("/status/json", handle_status_json)
