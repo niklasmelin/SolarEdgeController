@@ -121,6 +121,9 @@ async def main(stop_event: asyncio.Event | None = None):
             for key in HISTORY:
                 HISTORY[key].append(STATUS[key])
 
+            for key in CONTROL:
+                logging.debug(f"CONTROL {key}: {CONTROL[key]}")
+
             i += 1
             await asyncio.sleep(10)  # loop interval
 
