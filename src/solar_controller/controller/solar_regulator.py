@@ -26,7 +26,7 @@ class SolarRegulator:
 
         # ---------------- CONFIGURATION ----------------
         self.PEAK_PRODUCTION_W: float = 10500.0
-        self.MIN_PRODUCTION_W: float = 300.0
+        self.MIN_PRODUCTION_W: float = 500.0
         self.MAX_EXPORT_W: float = 200.0
 
         self.MAX_DELTA_PERCENT_PER_15S: float = 5.0

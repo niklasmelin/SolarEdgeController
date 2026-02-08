@@ -19,13 +19,18 @@ log = logging.getLogger(__name__)
 # --------------------------------------------------------------------
 # Shared state (used by your control loop / status page)
 # --------------------------------------------------------------------
-STATUS: Dict[str, float] = {
+STATUS: dict[str, float | int] = {
     "grid_consumption": 0.0,
     "home_consumption": 0.0,
     "solar_production": 0.0,
     "new_scale_factor": 0.0,
     "last_update": 0.0,  # epoch seconds
+
+    # NEW: bounds for HA NumberEntity
+    "inverter_min_power_W": 500,
+    "inverter_max_power_W": 0,   # set after identity read (or config)
 }
+
 
 HISTORY: Dict[str, Deque[float]] = {
     "grid_consumption": deque(maxlen=50),

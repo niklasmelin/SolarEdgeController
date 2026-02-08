@@ -113,8 +113,11 @@ async def main(stop_event: asyncio.Event | None = None):
                 "solar_production": solar_production,
                 "new_scale_factor": scale_factor,
                 "last_update": time.time(),
-                "power_limit_W": power_limit_W
-            })
+                "power_limit_W": power_limit_W,
+                "inverter_min_power_W": regulator.MIN_PRODUCTION_W,
+                "inverter_max_power_W": regulator.PEAK_PRODUCTION_W,
+                })
+            
             for key in HISTORY:
                 HISTORY[key].append(STATUS[key])
 
