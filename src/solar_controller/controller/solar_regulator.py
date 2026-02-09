@@ -118,27 +118,28 @@ class SolarRegulator:
                 # Auto mode enabled, target inverter output to meet export constraint.
                 desired_power: float = home + self.MAX_EXPORT_W
                 
-                logging.debug(f"Auto mode enabled and home consumption {home} W is below threshold {auto_mode_threshold} W, setting power limit to 0 W")
+                # Control error (watts)
+                error: float = desired_power - self.last_limited_power
+
+                # Proportional step (gentle for small errors)
+                step: float = error * self.GAIN_SMALL_ERROR
+
+                # Hard ramp limit (safety)
+                step = max(-self.max_step_watt, min(self.max_step_watt, step))
+
+                # Apply step
+                limited_power: float = self.last_limited_power + step
+
+                # Physical constraints
+                limited_power = max(limited_power, self.MIN_PRODUCTION_W)
+                limited_power = min(limited_power, solar)
+
+                logging.debug(f"Auto mode enabled and home consumption {home} W threshold {auto_mode_threshold} W, setting power limit to 0 W")
+
+            # Manual mode, target constant limited power output
             else:
-                desired_power = power_limit_W
+                limited_power = power_limit_W
                 logging.debug(f"Auto mode disabled, using power limit {power_limit_W} W")
-
-
-        # Control error (watts)
-        error: float = desired_power - self.last_limited_power
-
-        # Proportional step (gentle for small errors)
-        step: float = error * self.GAIN_SMALL_ERROR
-
-        # Hard ramp limit (safety)
-        step = max(-self.max_step_watt, min(self.max_step_watt, step))
-
-        # Apply step
-        limited_power: float = self.last_limited_power + step
-
-        # Physical constraints
-        limited_power = max(limited_power, self.MIN_PRODUCTION_W)
-        limited_power = min(limited_power, solar)
 
         # Update state
         self.last_limited_power = limited_power
