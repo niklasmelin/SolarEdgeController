@@ -86,7 +86,7 @@ async def main(stop_event: asyncio.Event | None = None):
                 await asyncio.sleep(10)
                 continue
             grid_consumption = current_import - current_export
-            home_consumption = abs(solar_production - grid_consumption)
+            home_consumption = abs(solar_production + grid_consumption)
             logging.debug(f"Grid consumption: {grid_consumption} W, Home consumption: {home_consumption} W")
 
             # --- Compute new scale factor ---
@@ -123,6 +123,10 @@ async def main(stop_event: asyncio.Event | None = None):
 
             for key in CONTROL:
                 logging.debug(f"CONTROL {key}: {CONTROL[key]}")
+
+            # Apply new scale factor to inverter
+            logging.debug(f"Applying new scale factor {scale_factor} % to inverter.")
+            await inverter.set_production_limit(scale_factor)
 
             i += 1
             await asyncio.sleep(10)  # loop interval
