@@ -49,6 +49,7 @@ async def main(stop_event: asyncio.Event | None = None):
     # Initial CONTROL values
     new_current_price = 0.0
     new_negative_price = False
+    previous_scale_factor = 100
 
     i = 0
     try:
@@ -125,8 +126,12 @@ async def main(stop_event: asyncio.Event | None = None):
                 logging.debug(f"CONTROL {key}: {CONTROL[key]}")
 
             # Apply new scale factor to inverter
-            logging.debug(f"Applying new scale factor {scale_factor} % to inverter.")
-            await inverter.set_production_limit(scale_factor)
+            if scale_factor != previous_scale_factor:
+                logging.debug(f"Applying new scale factor {scale_factor} % to inverter.")
+                await inverter.set_production_limit(scale_factor)
+                previous_scale_factor = scale_factor
+            else:
+                logging.debug("Scale factor unchanged, not updating inverter.")
 
             i += 1
             await asyncio.sleep(10)  # loop interval
