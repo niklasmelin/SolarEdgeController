@@ -50,6 +50,10 @@ async def main(stop_event: asyncio.Event | None = None):
     new_current_price = 0.0
     new_negative_price = False
     previous_scale_factor = 100
+    
+    # Ensure Converter is not limiting production at startup
+    logging.info("Ensuring inverter is not limiting production at startup.")
+    await inverter.set_production_limit(100)
 
     i = 0
     try:
