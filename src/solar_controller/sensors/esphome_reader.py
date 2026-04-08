@@ -11,6 +11,7 @@ from aioesphomeapi import (
     BinarySensorInfo,
     TextSensorInfo,
 )
+from aioesphomeapi.core import APIConnectionCancelledError, TimeoutAPIError
 
 
 class ESPHomeReader:
@@ -76,11 +77,14 @@ class ESPHomeReader:
         self._first_state_event = asyncio.Event()
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        # NEW: watchdog state
+        # Watchdog state
         self._stale_timeout = float(stale_timeout)
         self._last_rx_monotonic: float | None = None
         self._watchdog_task: asyncio.Task | None = None
         self._reconnect_lock = asyncio.Lock()
+        self._closing = False
+        
+        
 
     # ---------- INTERNAL CALLBACK ----------
     def _on_state(self, msg: Any) -> None:
@@ -121,7 +125,7 @@ class ESPHomeReader:
         # simple polling interval; small enough to react quickly
         poll_s = max(1.0, min(2.0, self._stale_timeout / 10.0))
 
-        while True:
+        while not self._closing:
             await asyncio.sleep(poll_s)
 
             if not self._connected:
@@ -155,13 +159,37 @@ class ESPHomeReader:
         while not self._connected:
             try:
                 await self.connect()
+            
+            except asyncio.CancelledError:
+                raise
+            
             except APIConnectionError as e:
+                if self._closing:
+                    return
+                
                 self.logger.warning(
                     "Reconnect failed, retrying in %ss, problem encountered %s",
                     self.reconnect_delay,
                     e,
                 )
                 await asyncio.sleep(self.reconnect_delay)
+
+    async def _stop_watchdog(self) -> None:
+        task = self._watchdog_task
+        if task is None or task.done():
+            self._watchdog_task = None
+            return
+        
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            self.logger.error("Error while stopping watchdog: %s", e)
+        finally:
+            self._watchdog_task = None
+        
 
     # ---------- CONNECTION MANAGEMENT ----------
     async def connect(self) -> None:
@@ -195,10 +223,23 @@ class ESPHomeReader:
                 raise
 
     async def disconnect(self):
+        
+        current = asyncio.current_task()
+        if self._watchdog_task is not None and self._watchdog_task != current:
+            self._closing = True
+            await self._stop_watchdog()
+        
         if self.client:
             self.logger.info("Disconnecting from ESPHome device")
-            await self.client.disconnect()
-            self.client = None
+            try:
+                await self.client.disconnect()
+            
+            except Exception as e:
+                self.logger.warning("Failed to disconnect from ESPHome device")
+            
+            finally:
+                self.client = None
+            
         self._connected = False
         self._last_rx_monotonic = None
         self._first_state_event.clear()
