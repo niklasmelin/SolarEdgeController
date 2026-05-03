@@ -33,8 +33,19 @@ async def main(stop_event: asyncio.Event | None = None):
     inverter = create_inverter(config.inverter)
     regulator = SolarRegulator()
 
+    
     # Start HTTP heartbeat server
-    asyncio.create_task(start_server(config, regulator, inverter=inverter))
+    try:
+        # asyncio.create_task(start_server(config, regulator, inverter=inverter))
+        await start_server(config, regulator, inverter=inverter)
+    except OSError as e:
+        logging.exception(f"Failed to start server, port may be in use!")
+        sys.exit(1)
+    except Exception as e:
+        logging.exception("Failed to start server: %s", e)
+        sys.exit(1)
+    
+
 
     # Connect to devices
     await reader.ensure_connected()

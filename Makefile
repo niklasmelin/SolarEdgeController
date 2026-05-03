@@ -21,8 +21,7 @@ IMAGE_NAME := solar_controller
 PYPROJECT := pyproject.toml
 
 # Retrieve version from pyproject.toml
-VERSION := $(shell $(PY) -c "import tomllib; print(tomllib.load(open('$(PYPROJECT)','rb'))['project']['version'])")
-
+VERSION := $(shell awk -F'"' '  /^\[project\]/ {p=1}  p && /^[[:space:]]*version[[:space:]]*=/ {    print $$2; exit  }' $(PYPROJECT) || echo dev)
 
 # --------------------------------------------------------------------
 # Default target
@@ -115,31 +114,61 @@ INTERMEDIATE_IMAGE := solaredgecontroller-solar-controller
 
 .PHONY: docker-clean
 docker-clean:
-	@echo "Stopping all containers using $(IMAGE) or $(INTERMEDIATE_IMAGE) images..."
-	-docker ps -a --filter "ancestor=$(IMAGE)" -q | xargs -r docker rm -f
-	-docker ps -a --filter "ancestor=$(INTERMEDIATE_IMAGE)" -q | xargs -r docker rm -f
+	@echo "Stopping and removing containers using $(IMAGE) or $(INTERMEDIATE_IMAGE)..."
+	@docker ps -a --format "{{.ID}} {{.Image}}" | \
+		awk '/$(IMAGE)|$(INTERMEDIATE_IMAGE)/ {print $$1}' | \
+		xargs -r docker rm -f
 
-	@echo "Removing all old $(IMAGE) images except 'latest' and version $(VERSION)..."
-	-docker images --format "{{.Repository}}:{{.Tag}}" | \
-		grep "^$(IMAGE):" | \
-		grep -vE ":(latest|$(VERSION))$$" | \
-		xargs -r docker rmi -f
+	@echo "Removing all tags pointing to $(IMAGE):latest..."
+	@ID=$$(docker image inspect $(IMAGE):latest -f '{{.Id}}' 2>/dev/null); \
+	if [ -n "$$ID" ]; then \
+		docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | \
+		awk -v id=$$ID '$$2==id {print $$1}' | \
+		xargs -r docker rmi; \
+	else \
+		echo "No image found for $(IMAGE):latest"; \
+	fi
 
-	@echo "Removing all intermediate build images: $(INTERMEDIATE_IMAGE)..."
-	-docker images --format "{{.Repository}}:{{.Tag}}" | \
+	@echo "Removing intermediate images: $(INTERMEDIATE_IMAGE)..."
+	@docker images --format "{{.Repository}}:{{.Tag}}" | \
 		grep "^$(INTERMEDIATE_IMAGE):" | \
 		xargs -r docker rmi -f
 
-	@echo "Pruning dangling layers..."
-	docker image prune -f
+	@echo "Pruning dangling images..."
+	@docker image prune -f
+
+	@echo "Pruning build cache..."
+	@docker builder prune -f
 
 	@echo "Docker cleanup complete."
+
+.PHONY: docker-run
+docker-run:
+	@echo "Starting solar_controller container (version: $(VERSION))..."
+	@echo "Checking if solar-controller is running..."
+	@if docker compose ps --services --filter "status=running" | grep -q "^solar-controller$$"; then \
+		echo "   ERROR: Service 'solar-controller' is already running."; \
+	else \
+		echo "   INFO: Starting solar-controller (version: $(VERSION))..."; \
+		VERSION=$(VERSION) docker compose up -d --build; \
+	fi
+
+.PHONY: docker-logs
+docker-logs:
+	@echo "Getting solar_controller logs (version: $(VERSION))..."
+	@if docker compose ps -q solar-controller | grep -q .; then \
+		docker compose logs solar-controller --tail=100 -f; \
+	else \
+		echo "ERROR: No running service 'solar-controller' (version: $(VERSION))"; \
+	fi
 
 # --------------------------------------------------------------------
 # Help
 # --------------------------------------------------------------------
 .PHONY: help
 help:
+	@echo "Solar Controller Project Makefile"
+	@echo "  Build target version: $(VERSION)"
 	@echo "Usage:"
 	@echo "  make venv             # Create virtual environment and install base requirements"
 	@echo "  make dev              # Create venv + install development requirements"
@@ -152,4 +181,6 @@ help:
 	@echo "  make clean            # Remove temporary files, cache, and venv"
 	@echo "  make docker-build     # Build Docker image $(IMAGE_NAME) with tags 'latest' and '$(VERSION)'"
 	@echo "  make docker-clean     # Stop and remove all containers/images matching $(IMAGE_PATTERN)"
+	@echo "  make docker-run       # Start solar_controller container (version: $(VERSION))"
+	@echo "  make docker-logs      # Tail logs from solar_controller container (version: $(VERSION))"
 

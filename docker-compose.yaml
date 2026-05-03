@@ -1,6 +1,7 @@
 services:
   solar-controller:
     restart: unless-stopped  
+    image: solar_controller:latest
     build:
       context: .
       dockerfile: Dockerfile
